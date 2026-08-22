@@ -28,7 +28,7 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
   const [format, setFormat] = useState<string>(openGame?.responseFormat ?? "buttons");
   const [sliderSteps, setSliderSteps] = useState<number>(openGame?.sliderSteps ?? 21);
   const [item, setItem] = useState<ItemPayload | null>(null);
-  const [sliderValue, setSliderValue] = useState<number>(Math.round((openGame?.sliderSteps ?? 21) / 2));
+  const [sliderValue, setSliderValue] = useState<number>(Math.round(((openGame?.sliderSteps ?? 21) - 1) / 2));
   const [error, setError] = useState<string | null>(null);
 
   // Mesures de l'ítem en curs
@@ -55,7 +55,8 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
         }
         const data: ItemPayload = await res.json();
         setItem(data);
-        setSliderValue(Math.round(sliderSteps / 2));
+        // Centre neutre EXACTE: amb N passos els valors són 0..N−1.
+        setSliderValue(Math.round((sliderSteps - 1) / 2));
         shownAt.current = performance.now();
         firstInputAt.current = null;
         adjustments.current = 0;
@@ -122,7 +123,8 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
     if (!el) return;
     submitLock.current = true;
     registerFirstInput();
-    void submit(Number(el.value) / sliderSteps);
+    // N passos = valors enters 0..N−1 → confiança k/(N−1).
+    void submit(Number(el.value) / (sliderSteps - 1));
   }
 
   async function submit(confidence: number) {
@@ -241,15 +243,19 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
         </div>
       ) : (
         <div className="slider-row">
-          <div className="slider-value">{Math.round((sliderValue / sliderSteps) * 100)}%</div>
+          <div className="slider-value">{Math.round((sliderValue / (sliderSteps - 1)) * 100)}%</div>
           <input
             ref={sliderRef}
             type="range"
             min={0}
-            max={sliderSteps}
+            max={sliderSteps - 1}
             step={1}
             value={sliderValue}
             disabled={phase !== "playing"}
+            style={{
+              // Farit visual fins al polze (webkit no ho fa sol)
+              background: `linear-gradient(to right, var(--accent) ${(sliderValue / (sliderSteps - 1)) * 100}%, var(--surface2) ${(sliderValue / (sliderSteps - 1)) * 100}%)`,
+            }}
             onChange={(e) => {
               adjustments.current += 1;
               registerFirstInput();
@@ -268,7 +274,7 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
             }}
             aria-label="Seguretat que existeix (allibera per respondre)"
           />
-          <div style={{ display: "flex", justifyContent: "space-between" }} className="small muted">
+          <div className="slider-hints small muted">
             <span>segur que no</span>
             <span>50%</span>
             <span>segur que sí</span>

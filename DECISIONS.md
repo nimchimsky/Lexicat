@@ -43,10 +43,10 @@ probabilitat a [0,1].
 
 ## 4. Nombre de passos del slider
 
-**21 passos** (`SLIDER_STEPS`) — resolució de 5%: suficient per distingir
-nivells de confiança reals sense fer tediosa la resposta en pantalla tàctil,
-i divisible en els mateixos punts simèctrics que els botons (k/21 ≈ categories).
-*(Actualització 22/08: el slider és ara el format actiu per defecte; vegeu §9.)*
+**21 passos** (`SLIDER_STEPS`): valors enters **0..20**, confiança = k/20 —
+resolució del 5%, centre exacte al 50% (el rang 0..N amb divisor N produïa un
+centre fals del «52%», corregit). *(Actualització 22/08: el slider és ara el
+format actiu per defecte; vegeu §9.)*
 
 ## 5. Mètrica exacta del rànquing 2 i correlació amb l'1
 
