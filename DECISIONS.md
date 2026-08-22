@@ -112,6 +112,12 @@ formats commutables per decidir «mesurant»); el registre per resposta conserva
 `n_adjustments`, que són exactament el que cal per comparar formats amb
 població pròpia.
 
+**Interacció (decisió Roger 22/08, revisió d'UX): sense botó de confirmar.**
+La resposta s'emetrà quan s'allibera l'slider: arrossegant o picant directament
+a la posició desitjada. Cobert amb `pointerup` (+ `touchend` de reserva, amb
+bloqueig anti-doble enviament, i `Enter` per a teclat). L'agulla comença al 50%
+i els camps de temps mesuren exactament igual que abans.
+
 ## 10. Mode convidat sense login (decisió Roger 22/08/2026)
 
 «Juga ara» crea un jugador sense correu amb sessió en galeta d'1 any: pot jugar,

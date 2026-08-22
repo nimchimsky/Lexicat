@@ -28,7 +28,7 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
   const [format, setFormat] = useState<string>(openGame?.responseFormat ?? "buttons");
   const [sliderSteps, setSliderSteps] = useState<number>(openGame?.sliderSteps ?? 21);
   const [item, setItem] = useState<ItemPayload | null>(null);
-  const [sliderValue, setSliderValue] = useState<number | null>(null);
+  const [sliderValue, setSliderValue] = useState<number>(Math.round((openGame?.sliderSteps ?? 21) / 2));
   const [error, setError] = useState<string | null>(null);
 
   // Mesures de l'ítem en curs
@@ -36,6 +36,8 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
   const firstInputAt = useRef<number | null>(null);
   const adjustments = useRef<number>(0);
   const responseId = useRef<string>("");
+  const sliderRef = useRef<HTMLInputElement | null>(null);
+  const submitLock = useRef<boolean>(false);
 
   const newResponseId = () => {
     responseId.current = crypto.randomUUID();
@@ -53,10 +55,11 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
         }
         const data: ItemPayload = await res.json();
         setItem(data);
-        setSliderValue(null);
+        setSliderValue(Math.round(sliderSteps / 2));
         shownAt.current = performance.now();
         firstInputAt.current = null;
         adjustments.current = 0;
+        submitLock.current = false;
         newResponseId();
         setPhase("playing");
       } catch (e) {
@@ -68,7 +71,7 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
         }
       }
     },
-    []
+    [sliderSteps]
   );
 
   useEffect(() => {
@@ -82,6 +85,7 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
   async function startGame() {
     setPhase("loading");
     setError(null);
+    submitLock.current = false;
     try {
       const res = await fetch("/api/game/start", { method: "POST" });
       if (!res.ok) {
@@ -103,6 +107,22 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
     if (firstInputAt.current === null) {
       firstInputAt.current = performance.now();
     }
+  }
+
+  /**
+   * L'slider ES RESPO EN DEIXAR-LO ANAR: arrossegant o picant directament a la
+   * posició (decisió del Roger: el botó de confirmar sobra i cal velocitat).
+   * pointerup cobreix ratolí/tàctil modern; touchend és el fallback; Enter
+   * queda per a teclat. El bloqueig evita el doble enviament
+   * pointerup+touchend d'alguns navegadors.
+   */
+  function commitSliderRelease() {
+    if (submitLock.current || phase !== "playing" || !item) return;
+    const el = sliderRef.current;
+    if (!el) return;
+    submitLock.current = true;
+    registerFirstInput();
+    void submit(Number(el.value) / sliderSteps);
   }
 
   async function submit(confidence: number) {
@@ -221,38 +241,38 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
         </div>
       ) : (
         <div className="slider-row">
-          <div className="slider-value">
-            {sliderValue === null ? "—" : `${Math.round((sliderValue / sliderSteps) * 100)}%`}
-          </div>
+          <div className="slider-value">{Math.round((sliderValue / sliderSteps) * 100)}%</div>
           <input
+            ref={sliderRef}
             type="range"
             min={0}
             max={sliderSteps}
             step={1}
-            value={sliderValue ?? Math.round(sliderSteps / 2)}
-            disabled={phase === "submitting"}
+            value={sliderValue}
+            disabled={phase !== "playing"}
             onChange={(e) => {
               adjustments.current += 1;
               registerFirstInput();
               setSliderValue(Number(e.target.value));
             }}
-            aria-label="Seguretat que existeix"
+            onPointerDown={() => registerFirstInput()}
+            onPointerUp={() => commitSliderRelease()}
+            onTouchEnd={() => commitSliderRelease()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commitSliderRelease();
+              } else {
+                registerFirstInput();
+              }
+            }}
+            aria-label="Seguretat que existeix (allibera per respondre)"
           />
           <div style={{ display: "flex", justifyContent: "space-between" }} className="small muted">
             <span>segur que no</span>
             <span>50%</span>
             <span>segur que sí</span>
           </div>
-          <button
-            className="btn"
-            disabled={phase === "submitting" || sliderValue === null}
-            onClick={() => {
-              if (sliderValue === null) return;
-              void submit(sliderValue / sliderSteps);
-            }}
-          >
-            {sliderValue === null ? "Arrossega l'slider i confirma" : "Confirma"}
-          </button>
         </div>
       )}
 
