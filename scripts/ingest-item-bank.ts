@@ -87,18 +87,19 @@ export async function runIngest(): Promise<void> {
       const slice = items.slice(offset, offset + BATCH);
       const params: unknown[] = [];
       const tuples = slice.map((it, k) => {
-        const b = k * 13;
+        const b = k * 14;
         params.push(
           it.itemId, it.form, it.isWord, it.a, it.b, it.bRasch,
           it.medianRtMs, it.accuracyRaw,
           it.wordStratumId, it.pseudoStratumId,
-          VERSIONS.itemBank, it.isWord /* in_reference_corpus a ref-1 */, true
+          VERSIONS.itemBank, it.isWord /* in_reference_corpus a ref-1 */, true,
+          null /* lemma_key: el CSV de calibratge no porta mapatge morfològic */
         );
-        return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9},$${b + 10},$${b + 11},$${b + 12},$${b + 13})`;
+        return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9},$${b + 10},$${b + 11},$${b + 12},$${b + 13},$${b + 14})`;
       });
       await client.query(
         `INSERT INTO items (item_id, form, is_word, a, b, b_rasch, median_rt_ms, accuracy_raw,
-             word_stratum_id, pseudo_stratum_id, bank_version, in_reference_corpus, active)
+             word_stratum_id, pseudo_stratum_id, bank_version, in_reference_corpus, active, lemma_key)
          VALUES ${tuples.join(",")}
          ON CONFLICT (item_id) DO UPDATE SET
            form = EXCLUDED.form, is_word = EXCLUDED.is_word,
@@ -112,6 +113,8 @@ export async function runIngest(): Promise<void> {
         params
       );
     }
+    // lemma_key NO es sobreescriu a l'upsert: el mapatge morfològic es gestiona
+    // fora de la ingesta (el CSV d'origen no el porta).
 
     const check = await client.query<{ is_word: boolean; n: string }>(
       `SELECT is_word, COUNT(*) AS n FROM items WHERE bank_version = $1 GROUP BY is_word`,

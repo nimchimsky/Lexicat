@@ -342,6 +342,33 @@ describe("selecció d'ítems (criteri 1 i 11)", () => {
     const usedFromStratum = ordered.find((i) => i.pseudoStratumId === 1)!;
     expect(exposures.has(usedFromStratum.itemId)).toBe(true); // ha hagut d'usar-ne un de vist
   });
+
+  it("un lema i les seves formes no surten mai a la mateixa partida", () => {
+    // Marca triplets de paraules d'estrats diferents amb el mateix lema:
+    // cap partida no els pot contenir plegats.
+    const tagged = bank.map((i) => ({ ...i }));
+    const groups: BankItem[][] = [];
+    for (let s = 1; s <= 9; s += 4) {
+      const g = tagged.filter((i) => i.isWord && [s, s + 1, s + 2].includes(i.wordStratumId!)).slice(0, 3);
+      for (const it of g) it.lemmaKey = `lem-${s}`;
+      if (g.length >= 2) groups.push(g);
+    }
+    expect(groups.length).toBeGreaterThanOrEqual(3);
+
+    for (let seed = 0; seed < 50; seed++) {
+      const { ordered } = selectGameItems(tagged, new Map(), mulberry32(seed), 1);
+      const seen = new Map<string, number>();
+      for (const it of ordered) {
+        if (!it.lemmaKey) continue;
+        const prev = seen.get(it.lemmaKey);
+        if (prev !== undefined && prev !== it.itemId) {
+          throw new Error(`Lema ${it.lemmaKey} repetit a la partida (seed ${seed})`);
+        }
+        seen.set(it.lemmaKey, it.itemId);
+      }
+      expect(ordered).toHaveLength(100);
+    }
+  });
 });
 
 describe("resultat complet de partida", () => {

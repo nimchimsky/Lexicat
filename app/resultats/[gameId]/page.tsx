@@ -91,7 +91,7 @@ export default async function Resultats({ params }: { params: Promise<{ gameId: 
                 <a href={d.diecUrl} target="_blank" rel="noopener noreferrer">
                   {d.stimulus}
                 </a>
-                <span className="conf">segur {Math.round((1 - d.confidence) * 100)}%</span>
+                <span className="conf">segur {Math.round((1 - d.confidence) * 100)}% · {d.points} punts</span>
               </li>
             ))}
           </ul>
@@ -107,13 +107,13 @@ export default async function Resultats({ params }: { params: Promise<{ gameId: 
           {view.falseAlarms.map((d) => (
             <li key={d.position}>
               <span style={{ fontSize: 17, fontWeight: 600 }}>{d.stimulus}</span>
-              <span className="conf">segur {Math.round(d.confidence * 100)}%</span>
+              <span className="conf">segur {Math.round(d.confidence * 100)}% · {d.points} punts</span>
             </li>
           ))}
         </ul>
       )}
 
-      {/* §7.4 · La resta, plegada */}
+      {/* §7.4 · La resta, plegada, amb els punts de cada ítem */}
       <details className="fold">
         <summary>La resta ({view.rest.length} encerts)</summary>
         <ul className="wordlist">
@@ -127,11 +127,16 @@ export default async function Resultats({ params }: { params: Promise<{ gameId: 
                 <span style={{ fontSize: 17 }}>{d.stimulus}</span>
               )}
               <span className="conf">
-                {d.isWord ? "paraula" : "pseudo"} · {Math.round((d.isWord ? d.confidence : 1 - d.confidence) * 100)}% encert
+                {d.isWord ? "paraula" : "pseudo"} · +{d.points} punts
               </span>
             </li>
           ))}
         </ul>
+        <p className="small muted">
+          Cada ítem val més com més difícil és (pes W = mapatge lineal de la b
+          real a [1,3]); la regla premia declarar la confiança real. ε=0,02, K=10
+          (sc-1).
+        </p>
       </details>
 
       {view.qualityFlag ? (

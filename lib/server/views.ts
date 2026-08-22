@@ -3,6 +3,9 @@
 
 import { query } from "./db";
 import { HttpError } from "./http";
+import { loadBank } from "./bank";
+import { displayItemScore, pAssignedToCorrect } from "../psychometrics/scoring";
+import { SCORE_K, SCORING_EPSILON } from "../config";
 
 export interface ResultItemRow {
   position: number;
@@ -13,6 +16,8 @@ export interface ResultItemRow {
   fiftyFifty: boolean;
   responseTimeMs: number | null;
   diecUrl: string;
+  /** Punts Pompeu d'aquest ítem (regla ε/K versionada). Mai negatius. */
+  points: number;
 }
 
 export interface GameResultsView {
@@ -78,9 +83,10 @@ export async function getGameResultsView(gameId: string, playerId: string): Prom
   const itemsRes = await query<{
     position: number; form: string; confidence: number; is_word: boolean;
     is_correct: boolean; fifty_fifty: boolean; response_time_ms: number | null;
+    item_id: number; b: number;
   }>(
     `SELECT gi.position, i.form, resp.confidence, resp.is_word, resp.is_correct,
-            resp.fifty_fifty, resp.response_time_ms
+            resp.fifty_fifty, resp.response_time_ms, i.item_id, i.b
      FROM responses resp
      JOIN game_items gi ON gi.game_id = resp.game_id AND gi.item_id = resp.item_id
      JOIN items i ON i.item_id = resp.item_id
@@ -89,6 +95,7 @@ export async function getGameResultsView(gameId: string, playerId: string): Prom
     [gameId]
   );
 
+  const { range } = await loadBank();
   const rows: ResultItemRow[] = itemsRes.rows.map((it) => ({
     position: it.position,
     stimulus: it.form,
@@ -98,6 +105,14 @@ export async function getGameResultsView(gameId: string, playerId: string): Prom
     fiftyFifty: it.fifty_fifty,
     responseTimeMs: it.response_time_ms,
     diecUrl: diecUrl(it.form),
+    points: displayItemScore(
+      pAssignedToCorrect(it.confidence, it.is_word),
+      it.b,
+      range.bMin,
+      range.bMax,
+      SCORING_EPSILON,
+      SCORE_K
+    ),
   }));
 
   // Descobertes: paraules reals dites "no", ordenades per confiança de l'error descendent.

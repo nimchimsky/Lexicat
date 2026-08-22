@@ -45,8 +45,10 @@ export async function loadBank(): Promise<CachedBank> {
     pseudo_stratum_id: number | null;
     active: boolean;
     in_reference_corpus: boolean;
+    lemma_key: string | null;
   }>(
-    `SELECT item_id, form, is_word, a, b, word_stratum_id, pseudo_stratum_id, active, in_reference_corpus
+    `SELECT item_id, form, is_word, a, b, word_stratum_id, pseudo_stratum_id, active,
+            in_reference_corpus, lemma_key
      FROM items WHERE bank_version = $1`,
     [VERSIONS.itemBank]
   );
@@ -77,6 +79,7 @@ export async function loadBank(): Promise<CachedBank> {
     pseudoStratumId: r.pseudo_stratum_id,
     active: r.active,
     inReferenceCorpus: r.in_reference_corpus,
+    lemmaKey: r.lemma_key,
   }));
 
   const refItems = itemsRes.rows

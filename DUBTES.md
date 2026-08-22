@@ -1,49 +1,113 @@
 # Dubtes oberts
 
-Coses que aquesta implementació NO decideix sola. Si alguna es resol, cal
-actualitzar `DECISIONS.md` i, si toca, bumpar la versió corresponent.
+Actualitzat amb les respostes del Roger del 22/08/2026. El que queda tancat hi
+surt com a **RESOLT**, amb l'acció feta al costat.
 
-1. **Conjunt de referència ref-2: només lemes?** El 81,7% de les 40.773 formes
-   són lemes; avui `cantar` i `cantaves` compten com a dues unitats i poden
-   sortir a la mateixa partida. Implementat com a `ref-1` (totes les formes),
-   tal com demana §12.8. Roger confirma que encara no està decidit. Quan es
-   decideixi: crear `ref-2`, recalcular `in_reference_corpus`, bumpar
-   `reference_corpus_version` i re-emitir els resultats que es vulguin comparar.
+---
 
-2. **Slider o botons?** Resolt provisionalment amb botons (RT de referència
-   coneguts), però la decisió definitiva «es prendrà mesurant»: el registre
-   guarda `response_format`, `time_to_first_input_ms`, `response_time_ms` i
-   `n_adjustments` precisament per decidir-ho amb població pròpia. Els dos
-   formats ja conviuen darrere d'una constant.
+## RESOLT · 1. Lemes i formes (era: «ref-2 només lemes?»)
 
-3. **Inestabilitat entre sessions (0,278 logits).** Ve d'un estudi amb un altre
-   format de resposta sobre gent autoseleccionada que repetia visita. Quan hi
-   hagi prou jugadors recurrents, tornar-la a mesurar amb població pròpia i
-   actualitzar `INSTABILITY_SE` (bumpant `calibration_version` si mou
-   intervals publicats).
+**Decisió del Roger:** `cantar` i `cantaves` NO han de sortir mai a la mateixa
+partida.
 
-4. **Percentil contra població no neutra.** La taula `pob-1` ve de l'estudi
-   (mediana 53 anys, dos terços universitaris, edat↔θ r = 0,313). La interfície
-   ho declara sempre. Caldrà substituir-la per una taula pròpia quan n'hi hagi.
+**Fet:** la selecció ara porta la restricció de grup de lema
+(`items.lemma_key`, migració 0002): dos ítems que comparteixin `lemma_key` no
+poden conviure a cap partida; si un estrat es quedés sense alternativa, cedeix
+el lema (mai el refredament) i ho registra a `selection_log`.
 
-5. **Llicències.** Llista de paraules de la URV; definicions de l'IEC (només
-   s'enllaça); freqüències tipus VeLeCa CC BY-NC. Aquesta implementació no fa
-   servir res més enllà del CSV de calibratge llegit com a origen. Si el projecte
-   esdevé comercial o vol mostrar qualsevol text de definició: aturar-se i
-   revisar abans.
+**Pendent (únic punt realment obert d'aquest tema):** el CSV de calibratge NO
+porta mapatge morfològic, així que avui tots els ítems tenen `lemma_key` NULL i
+la restricció és inerta. Cal obtenir el parell forma→lema (URV, o derivar-lo
+d'una font morfològica catalana) i carregar-lo amb un script nou. Fins això,
+`cantar`/`cantaves` poden coincidir per atzar com abans.
 
-6. **Rànquings 1 i 2 gairebé bessons (Spearman 0,997).** Mesurat a l'arnès.
-   L'especificació ho anticipava (§4.5) i deia «digues-ho»: dit queda. Decisió
-   pendent per al Roger: mantenir les dues llistes (narrativa diferent), fusionar-
-   les, o redissenyar la mètrica del 2 sabent que cap ponderació monòtona en θ
-   baixarà gaire la correlació.
+## RESOLT · 2. Slider i puntuació
 
-7. **Contracció del MAP als extrems.** Amb el prior N(0, 0,624²) exigit, un
-   jugador de θ real = ±1 surt amb θ̂ ≈ ±0,73–0,88 (contracció inherent, mesurada
-   a l'arnès). El biaix <0,02 del criteri 4 es compleix a θ=0; als extrems el
-   prior domina per disseny (és el que evita θ infinits). Si mai es vol menys
-   contracció cal canviar el prior i bumpar `calibration_version`.
+**Decisió del Roger:** l'slider és LA mecànica del joc.
 
-8. **Mailer de producció.** L'enllaç màgic té punt únic d'integració a
-   `lib/server/mailer.ts`; falta triar proveïdor (SMTP propi vs API externa).
-   En local funciona sense cap servei extern.
+**Fet:** els dos formats sempre van ser implementats darrere d'una constant
+(l'especificació ho exigia: «els dos, commutables»); el botons hi era per
+defecte per comparar amb les RT de l'estudi. Ara `ACTIVE_RESPONSE_FORMAT =
+"slider"` (21 passos) i el botons continua disponible commutant una línia.
+
+La puntuació ε/K també hi era des del primer commit (regla logarítmica amb
+ε=0,02, pes W per dificultat real b→[1,3], K=10, sense negatius, versionada
+sc-1). Ara a més es VE: cada fila de resultats mostra els punts de l'ítem i la
+secció «la resta» explica la regla. Res de marcador en joc: §3 ho prohibeix.
+
+## RESOLT · 3. Inestabilitat entre sessions
+
+**Decisió del Roger:** sí, que s'anidi actualitzant.
+
+**Fet/pla:** `INSTABILITY_SE` és un paràmetre únic documentat. Quan hi hagi
+jugadors recurrents propis, es reestimarà amb les seves partides i s'actualitzarà
+bumpant `calibration_version`.
+
+## RESOLT · 4. Població del percentil
+
+**Decisió del Roger:** les dades noves aniran servint poc a poc per a la
+referència.
+
+**Fet/pla:** la taula de percentils ja és versionada
+(`theta_population_versions`); el pla és regenerar-la periòdicament amb la θ
+estimada dels jugadors propis com a nova versió (`pob-2`, `pob-3`…), barrejant
+amb l'estudi fins que la pròpia domini. La UI sempre declara contra qui es
+compara.
+
+## RESOLT parcialment · 5. Definicions i diccionaris gratuïts
+
+**Decisió del Roger:** mai text de definició amb drets; es podran afegir
+diccionaris gratuïts (Apertium, potser).
+
+**Fet:** només enllaç DIEC (cap text). **Aparcat:** explorar Apertium/altres
+fonts lliures per afegir-hi una segona referència enllaçada o contingut lliure;
+cal verificar-ne la llicència exacta ABANS de mostrar qualsevol text.
+
+## EXPLICAT · 6. Què són els rànquings 1 i 2
+
+Són les dues taules de «millor partida»:
+
+- **Millors partides · encerts**: quantes de les 100 has encertat. És el
+  rànquing més defensable: amb els estrats, totes les partides són equivalents.
+- **Millors partides · lexicó**: el mateix encert però on cada paraula val
+  segons la seva dificultat (les rares valen més) i acceptar pseudoparaules
+  resta. Vol distingir qui sap paraules difícils de qui encerta fàcils.
+
+El problema mesurat: correlacionen 0,997 — ordenen pràcticament idèntic. Per
+això a la UI ara porten noms clars i la nota de correlació. **Decisió pendent
+del Roger:** mantenir les dues, fusionar-les en una, o deixar només «encerts»
+com a partida individual. La meva recomanació: deixar només «encerts» com a
+taula de millor partida, i reservar el «lexicó» per al rànquing general (on ja
+hi és, amb interval), que és on té sentit diferenciar.
+
+## TANCAT · 7. Contracció del MAP
+
+El prior N(0, 0,624²) fa que habilitats extremes surtin una mica tirades cap
+al centre (θ=+1 → ≈+0,72). És el preu conegut i desitjat del MAP: evita θ
+infinits amb partides perfectes. Implementació mantida per criteri delegat.
+
+## RESOLT · 8. Login, correu i deploy
+
+**Decisió del Roger:** gratuït i sense login quan sigui possible; deploy a
+GitHub + Vercel + Neon; **convidats han de poder jugar**.
+
+**Fet:**
+
+- **Mode convidat:** botó «Juga ara» crea sessió de convidat (sense correu,
+  sense res). Pot jugar, veure resultats i sortir als rànquings. Si més tard
+  entra amb correu, l'enllaç màgic fa *upgrade* del MATEIX jugador: conserva
+  tot l'historial (identitat persistent intacta).
+- **Correu gratuït recomanat: Resend** (API HTTP, 3.000 correus/mes gratis,
+  funciona a Vercel serverless on l'SMTP cru sol estar bloquejat). Configuració:
+  `RESEND_API_KEY` + opcionalment `MAIL_FROM`. Sense la clau, en dev l'enllaç
+  apareix per consola/pantalla.
+
+### Notes de deploy (Vercel + Neon)
+
+1. Neon: crear projecte → copiar la cadena `DATABASE_URL` (pooler).
+2. Vercel: importar repo GitHub; env vars `DATABASE_URL`, `AUTH_SECRET`,
+   `RESEND_API_KEY` (opcional), `MAIL_FROM`.
+3. Migracions + ingesta: executar-los una vegada apuntant `DATABASE_URL` a Neon
+   (`npm run db:setup` en local amb la cadena de Neon). El CSV d'origen ha de
+   ser accessible (`ITEM_BANK_CSV` si cal).
+4. Les migracions són idempotents i es poden repetir a cada deploy.

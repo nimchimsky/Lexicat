@@ -27,10 +27,14 @@ npm run db:setup
 npm run dev                   # http://localhost:3000
 ```
 
-L'entrada és per **enllaç màgic**: escriu el correu a `/entrar` i, en
-desenvolupament (sense SMTP), l'enllaç apareix a la pantalla i a la consola del
-servidor. En producció cal definir `SMTP_URL` i connectar el transport a
-`lib/server/mailer.ts` (punt únic d'integració).
+L'entrada té dos camins:
+
+- **Convidat (sense res):** «Juga ara» crea sessió de convidat; pots jugar tot
+  i sortir als rànquings. Si més tard entres amb correu, conserves tot
+  l'historial.
+- **Enllaç màgic:** correu a `/entrar`. En desenvolupament (sense clau de
+  correu) l'enllaç apareix a la pantalla i consola. A producció: `RESEND_API_KEY`
+  (gratuït fins a 3.000/mes, via API HTTP, ideal per Vercel).
 
 ## Verificació
 
@@ -123,13 +127,19 @@ Totes quatre es desaven a cada partida i a cada resposta.
 - Qualitat: RT<200 ms es marca; ≥20% marca la partida `suspect_fast`, que surt
   dels rànquings però es conserva. Abandonament definitiu a `DECISIONS.md`.
 
-## Desplegament
+## Desplegament (Vercel + Neon)
 
-- Node 20+ i Postgres 15+ (qualsevol proveïdor gestionat serveix).
-- Variables: `DATABASE_URL`, `AUTH_SECRET`; opcionalment `SMTP_URL`/`MAIL_FROM`
-  i `ITEM_BANK_CSV`/`THETA_CSV` si l'origen no és el germà del projecte.
-- `npm run build && npm run start` després de `npm run db:setup`.
-- Les migracions són idempotents i es poden executar a cada desplegament.
+1. **Neon:** projecte nou → cadena de connexió (pooler) com a `DATABASE_URL`.
+2. **Esquema + banc:** en local, amb la cadena de Neon:
+   `DATABASE_URL=... npm run db:setup` (migracions idempotents + ingesta; el CSV
+   d'origen ha de ser accessible via `ITEM_BANK_CSV`).
+3. **Vercel:** importar el repo de GitHub; env vars `DATABASE_URL`,
+   `AUTH_SECRET`, opcionalment `RESEND_API_KEY` i `MAIL_FROM`.
+4. Builds següents no toquen l'esquema; si hi ha migració nova,
+   `npm run db:migrate` contra Neon abans del deploy.
+
+Variables completes a `.env.example`. Les rutes API són `runtime = "nodejs"`
+(pg no corre al runtime Edge).
 
 ## Documents relacionats
 

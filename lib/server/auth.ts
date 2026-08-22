@@ -33,8 +33,10 @@ export async function createMagicToken(email: string, ip: string | null): Promis
 }
 
 /**
- * Canvia el token per una sessió nova. Crea el jugador si no existia
- * (l'identitat neix al primer accés i ja no desapareix mai).
+ * Canvia el token per una sessió nova. Si la sessió actual és d'un CONVIDAT
+ * (jugador sense correu), el correu nou s'assigna AL MATEIX jugador: tot el
+ * seu historial de partides i respostes es conserva (identitat persistent,
+ * §8.1). Si no, crea o reutilitza el jugador d'aquest correu.
  */
 export async function redeemMagicToken(token: string): Promise<{ playerId: string; hasNickname: boolean }> {
   const res = await query<{ id: string; email: string }>(
@@ -46,6 +48,20 @@ export async function redeemMagicToken(token: string): Promise<{ playerId: strin
   if (res.rowCount === 0) throw new HttpError(400, "Enllaç invàlit o caducat");
   const email = res.rows[0].email;
 
+  // 1) Upgrade de convidat: mateixa fila, mateix historial.
+  const current = await currentPlayer();
+  if (current && current.email === null) {
+    const claim = await query<{ id: string }>(
+      `UPDATE players SET email = $2 WHERE id = $1 AND email IS NULL AND deleted_at IS NULL
+       RETURNING id`,
+      [current.id, email]
+    );
+    if (claim.rowCount !== 0) {
+      return { playerId: current.id, hasNickname: false }; // triarà sobrenom de debò
+    }
+    // Correu ja agafat per un altre compte: cau al flux normal (sessió nova).
+  }
+
   const player = await query<{ id: string; nickname: string | null; deleted_at: Date | null }>(
     `INSERT INTO players (id, email)
      VALUES ($1, $2)
@@ -56,13 +72,17 @@ export async function redeemMagicToken(token: string): Promise<{ playerId: strin
   const p = player.rows[0];
   if (p.deleted_at) throw new HttpError(409, "Aquest compte està esborrat. Fes-ne un de nou.");
 
+  await issueSession(p.id);
+  return { playerId: p.id, hasNickname: p.nickname !== null };
+}
+
+async function issueSession(playerId: string): Promise<void> {
   const sessionToken = randomToken();
   await query(
     `INSERT INTO sessions (id, player_id, token_hash, expires_at)
      VALUES ($1, $2, $3, $4)`,
-    [crypto.randomUUID(), p.id, sha256(sessionToken), new Date(Date.now() + SESSION_TTL_MS)]
+    [crypto.randomUUID(), playerId, sha256(sessionToken), new Date(Date.now() + SESSION_TTL_MS)]
   );
-
   const jar = await cookies();
   jar.set(SESSION_COOKIE, sessionToken, {
     httpOnly: true,
@@ -71,8 +91,22 @@ export async function redeemMagicToken(token: string): Promise<{ playerId: strin
     maxAge: SESSION_TTL_MS / 1000,
     path: "/",
   });
+}
 
-  return { playerId: p.id, hasNickname: p.nickname !== null };
+/**
+ * Sessió de CONVIDAT: jugador sense correu amb identitat persistent a la
+ * galeta (1 any). Pot jugar tot, entrar als rànquings i, si més tard entra
+ * amb correu, conservar tot l'historial (redeemMagicToken fa l'upgrade).
+ */
+export async function createGuestSession(): Promise<{ playerId: string }> {
+  const playerId = crypto.randomUUID();
+  const suffix = crypto.randomBytes(4).toString("hex");
+  await query(
+    `INSERT INTO players (id, email, nickname) VALUES ($1, NULL, $2)`,
+    [playerId, `convidat-${suffix}`]
+  );
+  await issueSession(playerId);
+  return { playerId };
 }
 
 /** Jugador de la sessió actual, si n'hi ha un de vàlid i no esborrat. */

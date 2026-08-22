@@ -240,6 +240,7 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
           />
           <div style={{ display: "flex", justifyContent: "space-between" }} className="small muted">
             <span>segur que no</span>
+            <span>50%</span>
             <span>segur que sí</span>
           </div>
           <button
@@ -250,7 +251,7 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
               void submit(sliderValue / sliderSteps);
             }}
           >
-            Confirma
+            {sliderValue === null ? "Arrossega l'slider i confirma" : "Confirma"}
           </button>
         </div>
       )}

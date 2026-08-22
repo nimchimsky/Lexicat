@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { currentPlayer } from "@/lib/server/auth";
 import { getPlayerSummary } from "@/lib/server/views";
-import { ACTIVE_RESPONSE_FORMAT } from "@/lib/config";
+import { SLIDER_STEPS } from "@/lib/config";
+import GuestButton from "@/components/GuestButton";
 
 export const dynamic = "force-dynamic";
 
@@ -24,16 +25,14 @@ export default async function Home() {
           Un ítem per nivell de dificultat (66 paraules i 34 pseudoparaules),
           sempre comparable entre jugadors. Uns 4 minuts.
         </p>
-        <Link href="/entrar" className="btn" style={{ display: "block", textAlign: "center", textDecoration: "none" }}>
-          Entra per jugar
+        <GuestButton label="Juga ara, sense res més" />
+        <Link href="/entrar" className="btn secondary" style={{ display: "block", textAlign: "center", textDecoration: "none" }}>
+          Entra amb correu (per acumular entre dispositius)
         </Link>
         <p className="small muted">
-          Necessitem un compte lleuger (només el correu) perquè el teu resultat
-          s'acumuli entre partides i dispositius, l'interval s'estrenyi i puguis
-          entrar als rànquings.
-        </p>
-        <p className="small muted">
-          Format de resposta actiu: {ACTIVE_RESPONSE_FORMAT === "buttons" ? "5 botons" : "slider"}.
+          Pots jugar de convidat ja; si més tard entres amb correu, tot el que
+          hagis jugat es conserva. El format actiu és l&apos;slider
+          ({SLIDER_STEPS} passos).
         </p>
       </main>
     );

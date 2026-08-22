@@ -41,15 +41,12 @@ produeixi una puntuació diferent, i sense extrems 0/1 (que la regla logarítmic
 hauria de retallar sempre). El mateix tipus de dada que el slider: una
 probabilitat a [0,1].
 
-## 4. Nombre de passos del slider (si s'activa)
+## 4. Nombre de passos del slider
 
 **21 passos** (`SLIDER_STEPS`) — resolució de 5%: suficient per distingir
 nivells de confiança reals sense fer tediosa la resposta en pantalla tàctil,
-i divisible en els mateixos punts simètrics que els botons (k/21 ≈ categories).
-El primer desplegament, però, surt amb **botons discrets**
-(`ACTIVE_RESPONSE_FORMAT = "buttons"`), perquè és l'únic format amb RT de
-referència coneguts (~3,2 min/partida) i permet comparar amb l'estudi. El
-commutador és una constant; canviar-lo no toca res més (criteri 13).
+i divisible en els mateixos punts simèctrics que els botons (k/21 ≈ categories).
+*(Actualització 22/08: el slider és ara el format actiu per defecte; vegeu §9.)*
 
 ## 5. Mètrica exacta del rànquing 2 i correlació amb l'1
 
@@ -99,5 +96,32 @@ Implementat **com és avui: totes les formes flexionades, versió `ref-1`,
 denominador 40.773 paraules**, amb el camí obert a `ref-2`: la versió viu a
 `games.reference_corpus_version` i al flag `items.in_reference_corpus`; un futur
 ref-2 (només lemes) és una nova versió amb el flag recalculat, mai una mutació
-silenciosa del denominador. Roger ha confirmat que encara no es decideix si
-ref-2 serà de només lemes: queda apuntat a `DUBTES.md`.
+silenciosa del denominador.
+
+**Actualització (decisió Roger 22/08/2026):** un lema i les seves formes no
+poden sortir mai a la MATEIXA partida (`items.lemma_key` + restricció de
+selecció; migració 0002). El denominador continua sent ref-1 de formes; el
+mapatge forma→lema és l'únic pendent real (vegeu DUBTES.md).
+
+## 9. Slider actiu per defecte (decisió Roger 22/08/2026)
+
+`ACTIVE_RESPONSE_FORMAT = "slider"` amb 21 passos. Els cinc botons continuen
+implementats darrere la mateixa constant (l'especificació exigeix els dos
+formats commutables per decidir «mesurant»); el registre per resposta conserva
+`response_format`, `time_to_first_input_ms`, `response_time_ms` i
+`n_adjustments`, que són exactament el que cal per comparar formats amb
+població pròpia.
+
+## 10. Mode convidat sense login (decisió Roger 22/08/2026)
+
+«Juga ara» crea un jugador sense correu amb sessió en galeta d'1 any: pot jugar,
+veure resultats i sortir als rànquings amb sobrenom `convidat-*`. L'identitat
+persistente es manté: si el convidat entra després amb correu, l'enllaç màgic
+s'assigna al MATEIX jugador i conserva tot l'historial. Correu gratuït triat:
+Resend via API HTTP (`RESEND_API_KEY`), sense dependències noves.
+
+## 11. Puntuació visible per ítem
+
+Els punts Pompeu de cada resposta (mateixa regla ε/K/W versionada) es mostren a
+la pantalla de resultats, fila a fila, amb una línia que explica la regla.
+Dins la partida res canvia: cap marcador en moviment (§3).

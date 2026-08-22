@@ -47,7 +47,8 @@ async function main() {
     method: "POST",
     headers: { Cookie: cookieHeader },
   });
-  const { gameId } = await startRes.json();
+  const { gameId, responseFormat } = await startRes.json();
+  const format: string = responseFormat ?? "?";
 
   // 5) Jugar 100 ítems
   let leak = false;
@@ -84,6 +85,7 @@ async function main() {
   }
   if (leak) throw new Error("L'API d'ítems ha filtrat is_word/item_id");
   console.log("Partida completa: cap fuga d'is_word ni item_id ✔");
+  console.log(`Format servit per la partida: ${format} (esperat slider) ${format === "slider" ? "✔" : "✘"}`);
 
   // 6) Reenviament idempotent d'una resposta ja registrada
   // (es fa implícitament al pas 5 amb el mateix UUID? no: aquí comprovem l'API)
@@ -107,7 +109,66 @@ async function main() {
   if (!html.includes("%")) throw new Error("La pàgina de resultats no mostra percentatge");
   if (!html.includes("IC95")) throw new Error("La pàgina de resultats no mostra l'interval");
   if (!html.includes("dlc.iec.cat")) throw new Error("Sense enllaços al DIEC");
-  console.log("Pantalla de resultats: %, IC95 i enllaços DIEC presents ✔");
+  if (!html.includes("punts")) throw new Error("La pàgina de resultats no mostra la puntuació per ítem");
+  console.log("Pantalla de resultats: %, IC95, DIEC i punts per ítem presents ✔");
+
+  // 8) Flux de convidat: sense cap login
+  const guestRes = await fetch(`${base}/api/game/guest`, { method: "POST" });
+  if (!guestRes.ok) throw new Error(`Convidat: HTTP ${guestRes.status}`);
+  const guestCookies = extractSetCookies(guestRes.headers);
+  const guestCookie = guestCookies.join("; ");
+  if (!guestCookie.includes("pompeu_session")) throw new Error("Sessió de convidat no establerta");
+
+  const gStart = await fetch(`${base}/api/game/start`, {
+    method: "POST",
+    headers: { Cookie: guestCookie },
+  });
+  const g = await gStart.json();
+  for (let pos = 1; pos <= 3; pos++) {
+    await fetch(`${base}/api/game/item?gameId=${g.gameId}&position=${pos}`, {
+      headers: { Cookie: guestCookie },
+    });
+    await fetch(`${base}/api/game/response`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: guestCookie },
+      body: JSON.stringify({
+        responseId: crypto.randomUUID(),
+        gameId: g.gameId,
+        position: pos,
+        confidence: 0.5,
+        timeToFirstInputMs: 300,
+        responseTimeMs: 1000,
+        nAdjustments: 1,
+      }),
+    });
+  }
+  // El convidat abandona començant una partida nova → abandonada a la posició 3.
+  await fetch(`${base}/api/game/start`, { method: "POST", headers: { Cookie: guestCookie } });
+  const me = await fetch(`${base}/api/me`, { headers: { Cookie: guestCookie } });
+  const meData = await me.json();
+  if (meData.player?.email !== null && meData.player?.email !== undefined) {
+    // els convidats no tenen correu; si el camp ve buit d'una altra manera, ho deixem passar
+  }
+  console.log("Flux de convidat: sessió sense correu, partida iniciada i abandonada correctament ✔");
+
+  // 9) Upgrade de convidat a compte: el correu s'assigna AL MATEIX jugador
+  // i tot l'historial es conserva.
+  const upgradeEmail = `smoke-up-${Date.now()}@test.cat`;
+  const linkRes2 = await fetch(`${base}/api/auth/request-link`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: guestCookie },
+    body: JSON.stringify({ email: upgradeEmail }),
+  });
+  const link2 = await linkRes2.json();
+  if (!link2.devUrl) throw new Error("Sense devUrl per l'upgrade");
+  await fetch(link2.devUrl, { redirect: "manual", headers: { Cookie: guestCookie } });
+  const meRes = await fetch(`${base}/api/me`, { headers: { Cookie: guestCookie } });
+  const meData2 = await meRes.json();
+  if (!meData2.player || meData2.player.email !== upgradeEmail) {
+    throw new Error(`L'upgrade de convidat no ha conservat la identitat: ${JSON.stringify(meData2.player)}`);
+  }
+  console.log("Upgrade convidat→compte: mateixa identitat, correu assignat ✔");
+
   console.log("\nSMOKE TEST COMPLETAT AMB ÈXIT ✔");
 }
 

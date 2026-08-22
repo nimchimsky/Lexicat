@@ -44,10 +44,10 @@ export const B_WEIGHT_FALLBACK = { min: -9.5, max: 3.75 } as const;
 
 export type ResponseFormat = "slider" | "buttons";
 
-/** Format actiu del primer desplegament. Es commuta aquí i res més. */
-export const ACTIVE_RESPONSE_FORMAT: ResponseFormat = "buttons";
+/** Format actiu del desplegament: l'slider és LA mecànica del joc (decisió Roger). */
+export const ACTIVE_RESPONSE_FORMAT: ResponseFormat = "slider";
 
-/** Passos del slider si s'activa. */
+/** Passos del slider. 21 = resolució del 5%. */
 export const SLIDER_STEPS = 21; // o 11
 
 /**

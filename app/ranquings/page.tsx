@@ -24,30 +24,35 @@ export default async function Ranquings() {
         Els generals usen la mitjana de les últimes 5 partides completes vàlides
         (mai «la teva millor partida», que regala precisió a qui més insisteix).
         Amb menys de 5, es fan amb les que hi hagi i l&apos;interval surt més ample.
+        Els dos primers ordenen gairebé igual (correlació ≈ 0,997): compten coses
+        diferents — encerts crus vs encert ponderat per dificultat penalitzant
+        falses alarmes — i per això conviuen.
       </p>
 
       {error && <div className="notice">{error}</div>}
 
-      <h2>1 · Partida individual, encert</h2>
+      <h2>Millors partides · encerts</h2>
+      <p className="muted small">Quantes de les 100 has encertat, sense cap correcció.</p>
       <Board rows={(boards?.individualHits ?? []).map((r) => ({ nickname: r.nickname!, value: String(Math.round(r.value)), detail: "" }))} />
 
-      <h2>2 · Partida individual, lexicó</h2>
+      <h2>Millors partides · lexicó</h2>
       <p className="muted small">
-        Encert ponderat per la dificultat real de cada paraula, penalitzant les
-        falses alarmes.
+        Encert ponderat per la dificultat real de cada paraula (les rares valen
+        més), penalitzant les falses alarmes.
       </p>
       <Board rows={(boards?.individualLexicon ?? []).map((r) => ({ nickname: r.nickname!, value: `${fmt(r.value * 100)}`, detail: "" }))} />
 
-      <h2>3 · General, encert</h2>
+      <h2>Rànquing general · encerts</h2>
+      <p className="muted small">Mitjana d&apos;encerts de les últimes 5 partides.</p>
       <Board rows={(boards?.generalHits ?? []).map((r) => ({
         nickname: r.nickname!,
         value: fmt(r.value, 0),
         detail: r.detail ?? "",
       }))} />
 
-      <h2>4 · General, lexicó estimat</h2>
+      <h2>Rànquing general · estimació del lexicó</h2>
       <p className="muted small">
-        θ estimat sobre totes les respostes de la finestra ajuntades; el
+        Estimació sobre totes les respostes de la finestra ajuntades; el
         percentatge ve amb el seu interval.
       </p>
       <Board

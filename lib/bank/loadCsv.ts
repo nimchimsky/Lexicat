@@ -15,6 +15,8 @@ export interface BankItem {
   accuracyRaw: number | null;
   wordStratumId: number | null;
   pseudoStratumId: number | null;
+  /** Grup de lema; el CSV de calibratge no el porta (NULL fins que hi hagi mapatge morfològic). */
+  lemmaKey?: string | null;
 }
 
 /** Les 34 pseudoparaules contaminades (b_rasch > 1,0). Exclusió PER ID, no per regla.
@@ -180,6 +182,7 @@ export function buildBankFromCsvText(csvText: string): LoadedBank {
       accuracyRaw: Number.isFinite(toNum(row[idx("accuracy_raw")])) ? toNum(row[idx("accuracy_raw")]) : null,
       wordStratumId: null,
       pseudoStratumId: null,
+      lemmaKey: null,
     });
   }
 

@@ -37,6 +37,8 @@ export async function sweepAbandonedGames(playerId?: string): Promise<void> {
 export interface StartedGame {
   gameId: string;
   playerGameIndex: number;
+  responseFormat: string;
+  sliderSteps: number | null;
 }
 
 export async function startGame(
@@ -101,7 +103,7 @@ export async function startGame(
         ACTIVE_RESPONSE_FORMAT,
         ACTIVE_RESPONSE_FORMAT === "slider" ? SLIDER_STEPS : null,
         deviceClass,
-        JSON.stringify(selection.relaxedStrata),
+        JSON.stringify({ cooldown: selection.relaxedStrata, lemma: selection.lemmaRelaxedStrata }),
       ]
     );
 
@@ -118,15 +120,16 @@ export async function startGame(
       values
     );
 
-    if (selection.relaxedStrata.length > 0) {
+    if (selection.relaxedStrata.length > 0 || selection.lemmaRelaxedStrata.length > 0) {
       await client.query(
-        `INSERT INTO selection_log (game_id, event, detail) VALUES ($1, 'relaxed_cooldown', $2)`,
-        [gameId, JSON.stringify({ strata: selection.relaxedStrata })]
+        `INSERT INTO selection_log (game_id, event, detail)
+         VALUES ($1, 'relaxations', $2)`,
+        [gameId, JSON.stringify({ cooldown: selection.relaxedStrata, lemma: selection.lemmaRelaxedStrata })]
       );
     }
 
     await client.query("COMMIT");
-    return { gameId, playerGameIndex };
+    return { gameId, playerGameIndex, responseFormat: ACTIVE_RESPONSE_FORMAT, sliderSteps: ACTIVE_RESPONSE_FORMAT === "slider" ? SLIDER_STEPS : null };
   } catch (e) {
     await client.query("ROLLBACK");
     throw e;

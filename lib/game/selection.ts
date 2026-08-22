@@ -10,6 +10,12 @@ export interface SelectableItem {
   /** Estrats de comptatge igual calculats a la ingesta (numeració separada). */
   wordStratumId: number | null;
   pseudoStratumId: number | null;
+  /**
+   * Grup de lema (opcional). Si dos ítems el comparteixen, NO poden sortir a
+   * la mateixa partida: `cantar` i `cantaves` no hi conviuen mai (decisió del
+   * Roger). NULL = mapatge morfològic encara no disponible per aquest ítem.
+   */
+  lemmaKey?: string | null;
 }
 
 /** Mapa itemId → índex de la darrera partida del jugador on el va veure. */
@@ -20,6 +26,8 @@ export interface SelectionResult<T extends SelectableItem> {
   ordered: T[];
   /** Estrats on s'ha hagut de relaxar el refredament. */
   relaxedStrata: number[];
+  /** Estrats on la restricció de lema ha hagut de cedir (estrat esgotat). */
+  lemmaRelaxedStrata: number[];
 }
 
 /**
@@ -62,21 +70,33 @@ export function selectGameItems<T extends SelectableItem>(
   const words = bank.filter((i) => i.isWord);
   const pseudos = bank.filter((i) => !i.isWord);
 
-  const chosenWords = pickPerStratum(words, "wordStratumId", N_WORD_ITEMS, exposures, rng, currentGameIndex, cooldownGames);
-  const chosenPseudos = pickPerStratum(pseudos, "pseudoStratumId", N_PSEUDO_ITEMS, exposures, rng, currentGameIndex, cooldownGames);
+  // Els grups de lema triats compten entre paraules I pseudoparaules:
+  // cap lema dos cops dins la mateixa partida.
+  const chosenLemmas = new Set<string>();
+
+  const chosenWords = pickPerStratum(words, "wordStratumId", N_WORD_ITEMS, exposures, rng, currentGameIndex, cooldownGames, chosenLemmas);
+  const chosenPseudos = pickPerStratum(pseudos, "pseudoStratumId", N_PSEUDO_ITEMS, exposures, rng, currentGameIndex, cooldownGames, chosenLemmas);
 
   const combined = [...chosenWords.picked, ...chosenPseudos.picked];
-  const relaxedStrata = [...chosenWords.relaxed, ...chosenPseudos.relaxed];
+  const relaxedStrata = [...chosenWords.relaxedCooldown, ...chosenPseudos.relaxedCooldown];
+  const lemmaRelaxedStrata = [...chosenWords.relaxedLemma, ...chosenPseudos.relaxedLemma];
 
   // Comprovació dura de composició: mai sortir una partida mal formada.
   const ids = new Set(combined.map((i) => i.itemId));
   if (ids.size !== combined.length) throw new Error("Ítem repetit dins de la partida");
+  const lemmaSeen = new Set<string>();
+  for (const it of combined) {
+    if (it.lemmaKey) {
+      if (lemmaSeen.has(it.lemmaKey)) throw new Error(`Lema repetit dins la partida: ${it.lemmaKey}`);
+      lemmaSeen.add(it.lemmaKey);
+    }
+  }
   if (chosenWords.picked.length !== N_WORD_ITEMS || chosenPseudos.picked.length !== N_PSEUDO_ITEMS) {
     throw new Error("Composició 66/34 no assolible amb el banc actual");
   }
 
   const ordered = fisherYates(combined, rng);
-  return { ordered, relaxedStrata };
+  return { ordered, relaxedStrata, lemmaRelaxedStrata };
 }
 
 function pickPerStratum<T extends SelectableItem>(
@@ -86,8 +106,9 @@ function pickPerStratum<T extends SelectableItem>(
   exposures: ExposureMap,
   rng: () => number,
   currentGameIndex: number,
-  cooldownGames: number
-): { picked: T[]; relaxed: number[] } {
+  cooldownGames: number,
+  chosenLemmas: Set<string>
+): { picked: T[]; relaxedCooldown: number[]; relaxedLemma: number[] } {
   const byStratum = new Map<number, T[]>();
   for (const it of items) {
     const s = it[stratumKey];
@@ -98,32 +119,51 @@ function pickPerStratum<T extends SelectableItem>(
   }
 
   const picked: T[] = [];
-  const relaxed: number[] = [];
+  const relaxedCooldown: number[] = [];
+  const relaxedLemma: number[] = [];
   for (let s = 1; s <= nStrata; s++) {
     const pool = byStratum.get(s);
     if (!pool || pool.length === 0) throw new Error(`L'estrat ${s} és buit al banc`);
-    const eligible = pool.filter((it) => {
+
+    const cooledDown = pool.filter((it) => {
       const last = exposures.get(it.itemId);
       return last === undefined || currentGameIndex - last > cooldownGames;
     });
+
+    // 1a preferència: refredament respectat i lema lliure.
+    const eligible = cooledDown.filter((it) => !it.lemmaKey || !chosenLemmas.has(it.lemmaKey));
     if (eligible.length > 0) {
-      picked.push(pickRandom(eligible, rng));
-    } else {
-      // Relaxació només per aquest estrat: el menys recentment vist.
-      relaxed.push(s);
-      let best: T | undefined;
-      let bestLast = Infinity;
-      for (const it of pool) {
-        const last = exposures.get(it.itemId) ?? -Infinity;
-        if (last < bestLast) {
-          bestLast = last;
-          best = it;
-        }
-      }
-      picked.push(best!);
+      const chosen = pickRandom(eligible, rng);
+      picked.push(chosen);
+      if (chosen.lemmaKey) chosenLemmas.add(chosen.lemmaKey);
+      continue;
     }
+
+    // 2a: refredament respectat però només ítems de lema ja triat → cedeix el
+    // lema per aquest estrat (registrat), mai el refredament.
+    if (cooledDown.length > 0) {
+      const chosen = pickRandom(cooledDown, rng);
+      picked.push(chosen);
+      if (chosen.lemmaKey) chosenLemmas.add(chosen.lemmaKey);
+      relaxedLemma.push(s);
+      continue;
+    }
+
+    // 3a: estrat sense res de fresc → relaxa el refredament NOMÉS aquí.
+    relaxedCooldown.push(s);
+    let best: T | undefined;
+    let bestLast = Infinity;
+    for (const it of pool) {
+      const last = exposures.get(it.itemId) ?? -Infinity;
+      if (last < bestLast) {
+        bestLast = last;
+        best = it;
+      }
+    }
+    picked.push(best!);
+    if (best!.lemmaKey) chosenLemmas.add(best!.lemmaKey);
   }
-  return { picked, relaxed };
+  return { picked, relaxedCooldown, relaxedLemma };
 }
 
 export function fisherYates<T>(arr: T[], rng: () => number): T[] {

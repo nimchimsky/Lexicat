@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { currentPlayer } from "@/lib/server/auth";
 import EmailForm from "@/components/EmailForm";
+import GuestButton from "@/components/GuestButton";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,8 @@ export default async function Entrar({
       <h1>Entra</h1>
       <p className="muted">
         Només el correu. T&apos;hi enviem un enllaç màgic: sense contrasenya.
+        Serveix per acumular resultats entre dispositius; per jugar ara mateix
+        no cal res.
       </p>
       {error ? (
         <div className="notice">
@@ -26,6 +29,8 @@ export default async function Entrar({
         </div>
       ) : null}
       <EmailForm />
+      <p className="muted" style={{ textAlign: "center" }}>— o —</p>
+      <GuestButton />
     </main>
   );
 }
