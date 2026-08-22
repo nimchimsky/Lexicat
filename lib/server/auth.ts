@@ -1,0 +1,137 @@
+// Identitat persistent: comptes lleugers amb enllaç màgic i sessió en galeta.
+// L'identificador del jugador és estable entre visites i dispositius (§8.1):
+// sense això no hi ha rànquing acumulat ni interval que s'estrenyi.
+
+import crypto from "node:crypto";
+import { cookies } from "next/headers";
+import { query } from "./db";
+import { HttpError } from "./http";
+
+export const SESSION_COOKIE = "pompeu_session";
+const SESSION_TTL_MS = 180 * 24 * 60 * 60 * 1000;
+const MAGIC_TTL_MS = 15 * 60 * 1000;
+
+function sha256(s: string): Buffer {
+  return crypto.createHash("sha256").update(s).digest();
+}
+
+export function randomToken(): string {
+  return crypto.randomBytes(32).toString("hex");
+}
+
+/** Crea un token d'enllaç màgic per a un correu. Retorna el token en clar. */
+export async function createMagicToken(email: string, ip: string | null): Promise<string> {
+  const emailNorm = email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNorm)) throw new Error("Correu invàlid");
+  const token = randomToken();
+  await query(
+    `INSERT INTO auth_tokens (id, email, token_hash, expires_at, created_ip)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [crypto.randomUUID(), emailNorm, sha256(token), new Date(Date.now() + MAGIC_TTL_MS), ip]
+  );
+  return token;
+}
+
+/**
+ * Canvia el token per una sessió nova. Crea el jugador si no existia
+ * (l'identitat neix al primer accés i ja no desapareix mai).
+ */
+export async function redeemMagicToken(token: string): Promise<{ playerId: string; hasNickname: boolean }> {
+  const res = await query<{ id: string; email: string }>(
+    `UPDATE auth_tokens SET used_at = now()
+     WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
+     RETURNING id, email`,
+    [sha256(token)]
+  );
+  if (res.rowCount === 0) throw new HttpError(400, "Enllaç invàlit o caducat");
+  const email = res.rows[0].email;
+
+  const player = await query<{ id: string; nickname: string | null; deleted_at: Date | null }>(
+    `INSERT INTO players (id, email)
+     VALUES ($1, $2)
+     ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
+     RETURNING id, nickname, deleted_at`,
+    [crypto.randomUUID(), email]
+  );
+  const p = player.rows[0];
+  if (p.deleted_at) throw new HttpError(409, "Aquest compte està esborrat. Fes-ne un de nou.");
+
+  const sessionToken = randomToken();
+  await query(
+    `INSERT INTO sessions (id, player_id, token_hash, expires_at)
+     VALUES ($1, $2, $3, $4)`,
+    [crypto.randomUUID(), p.id, sha256(sessionToken), new Date(Date.now() + SESSION_TTL_MS)]
+  );
+
+  const jar = await cookies();
+  jar.set(SESSION_COOKIE, sessionToken, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    maxAge: SESSION_TTL_MS / 1000,
+    path: "/",
+  });
+
+  return { playerId: p.id, hasNickname: p.nickname !== null };
+}
+
+/** Jugador de la sessió actual, si n'hi ha un de vàlid i no esborrat. */
+export async function currentPlayer(): Promise<{ id: string; email: string; nickname: string | null } | null> {
+  const jar = await cookies();
+  const raw = jar.get(SESSION_COOKIE)?.value;
+  if (!raw) return null;
+  const res = await query<{ id: string; email: string; nickname: string | null }>(
+    `SELECT p.id, p.email::text AS email, p.nickname
+     FROM sessions s JOIN players p ON p.id = s.player_id
+     WHERE s.token_hash = $1 AND s.expires_at > now() AND p.deleted_at IS NULL`,
+    [sha256(raw)]
+  );
+  return res.rows[0] ?? null;
+}
+
+export async function requirePlayer(): Promise<{ id: string; email: string; nickname: string | null }> {
+  const p = await currentPlayer();
+  if (!p) throw new HttpError(401, "Sessió requerida");
+  return p;
+}
+
+export async function logout(): Promise<void> {
+  const jar = await cookies();
+  const raw = jar.get(SESSION_COOKIE)?.value;
+  if (raw) {
+    await query(`DELETE FROM sessions WHERE token_hash = $1`, [sha256(raw)]);
+  }
+  jar.delete(SESSION_COOKIE);
+}
+
+export async function setNickname(playerId: string, nickname: string): Promise<void> {
+  const nick = nickname.trim().toLowerCase().slice(0, 24);
+  if (!/^[a-z0-9·àèéíïóòúüç_-]{3,24}$/.test(nick)) {
+    throw new HttpError(400, "El sobrenom ha de tenir 3–24 caràcters (lletres, xifres, - o _)");
+  }
+  try {
+    await query(`UPDATE players SET nickname = $2 WHERE id = $1`, [playerId, nick]);
+  } catch (e) {
+    if (String(e).includes("players_nickname_key")) throw new HttpError(409, "Aquest sobrenom ja està agafat");
+    throw e;
+  }
+}
+
+/**
+ * Eliminació GDPR: la fila del jugador queda anonimitzada (correu i sobrenom
+ * fora), les respostes ja entrada al calibratge es conserven deslligades de
+ * qualsevol persona identificable.
+ */
+export async function deleteAccount(playerId: string): Promise<void> {
+  await query(`DELETE FROM sessions WHERE player_id = $1`, [playerId]);
+  await query(`DELETE FROM auth_tokens WHERE email = (SELECT email FROM players WHERE id = $1)`, [playerId]);
+  await query(`DELETE FROM player_standings WHERE player_id = $1`, [playerId]);
+  await query(
+    `UPDATE players SET
+       email = NULL,
+       nickname = 'esborrat-' || left($2, 8),
+       deleted_at = now()
+     WHERE id = $1`,
+    [playerId, crypto.randomUUID()]
+  );
+}

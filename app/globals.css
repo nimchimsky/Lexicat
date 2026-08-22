@@ -1,0 +1,224 @@
+:root {
+  --bg: #14131a;
+  --surface: #1e1d26;
+  --surface2: #292833;
+  --text: #f0eff4;
+  --muted: #a3a1b0;
+  --accent: #ffb454;
+  --accent2: #7aa2f7;
+  --good: #9ece6a;
+  --bad: #f7768e;
+  --radius: 14px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+.shell {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 16px 16px calc(24px + env(safe-area-inset-bottom));
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.footer {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 12px 16px calc(20px + env(safe-area-inset-bottom));
+  color: var(--muted);
+  font-size: 13px;
+}
+.footer a { color: var(--muted); }
+
+h1 { font-size: 26px; margin: 18px 0 8px; }
+h2 { font-size: 19px; margin: 22px 0 8px; }
+p  { margin: 8px 0; }
+a  { color: var(--accent2); }
+
+.muted { color: var(--muted); font-size: 14px; }
+.small { font-size: 12px; }
+
+.btn {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #14131a;
+  font-size: 17px;
+  font-weight: 700;
+  padding: 15px 18px;
+  margin: 10px 0;
+  cursor: pointer;
+  min-height: 52px;
+}
+.btn.secondary {
+  background: var(--surface2);
+  color: var(--text);
+  font-weight: 500;
+}
+.btn.danger {
+  background: transparent;
+  border: 1px solid var(--bad);
+  color: var(--bad);
+  font-weight: 500;
+}
+.btn:disabled { opacity: 0.5; cursor: default; }
+
+input[type="email"], input[type="text"] {
+  width: 100%;
+  padding: 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--surface2);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 16px;
+}
+
+.card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin: 10px 0;
+}
+
+/* ---------------- Joc ---------------- */
+
+.progressbar {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--surface2);
+  overflow: hidden;
+  margin: 8px 0 4px;
+}
+.progressbar > div {
+  height: 100%;
+  background: var(--accent);
+  transition: width 120ms linear;
+}
+
+.counter {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.stimulus-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38dvh;
+}
+.stimulus {
+  font-size: clamp(30px, 9vw, 44px);
+  letter-spacing: 0.02em;
+  text-align: center;
+  word-break: break-word;
+  hyphens: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.answers {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+.answers .btn { margin: 0; }
+
+.slider-row { margin-top: 8px; }
+.slider-value {
+  text-align: center;
+  font-size: 26px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+input[type="range"] {
+  width: 100%;
+  height: 44px;
+  accent-color: var(--accent);
+}
+
+/* ---------------- Resultats ---------------- */
+
+.big-number {
+  font-size: 54px;
+  font-weight: 800;
+  line-height: 1.05;
+  color: var(--accent);
+}
+.interval {
+  color: var(--muted);
+  font-size: 15px;
+  margin-top: 4px;
+}
+
+.statgrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-top: 12px;
+}
+.stat {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+.stat b { display: block; font-size: 22px; }
+.stat span { color: var(--muted); font-size: 13px; }
+
+.wordlist { list-style: none; margin: 6px 0; padding: 0; }
+.wordlist li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--surface2);
+}
+.wordlist a {
+  font-size: 17px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.wordlist a:hover { text-decoration: underline; }
+.conf { color: var(--muted); font-size: 13px; white-space: nowrap; }
+
+details.fold { margin-top: 10px; }
+details.fold summary {
+  cursor: pointer;
+  color: var(--accent2);
+  padding: 10px 0;
+}
+
+table.board { width: 100%; border-collapse: collapse; font-size: 15px; }
+table.board td, table.board th {
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--surface2);
+  text-align: left;
+}
+table.board td.num { text-align: right; font-variant-numeric: tabular-nums; }
+table.board th { color: var(--muted); font-weight: 500; font-size: 13px; }
+
+.notice {
+  background: rgba(255, 180, 84, 0.08);
+  border-left: 3px solid var(--accent);
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  margin: 10px 0;
+}
