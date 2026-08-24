@@ -31,8 +31,8 @@ export default function AccountActions() {
       {confirming ? (
         <div className="notice">
           <p>
-            <b>Esborraràs el teu compte.</b> El correu i el sobrenom desapareixen
-            del tot. Les respostes ja entrada al calibratge científic es
+            <b>Esborraràs el teu compte.</b> El correu, el sobrenom i el perfil
+            opcional desapareixen del tot. Les respostes ja entrada al calibratge científic es
             conserven, però completament deslligades de tu. No es pot desfer.
           </p>
           <button className="btn danger" disabled={busy} onClick={() => void doDelete()}>

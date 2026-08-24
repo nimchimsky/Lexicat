@@ -6,6 +6,7 @@ import { HttpError } from "./http";
 import { loadBank } from "./bank";
 import { displayItemScore, pAssignedToCorrect } from "../psychometrics/scoring";
 import { SCORE_K, SCORING_EPSILON } from "../config";
+import { getPlayerProfile, type PlayerProfile } from "./profile";
 
 export interface ResultItemRow {
   position: number;
@@ -419,5 +420,181 @@ export async function getPlayerSummary(playerId: string) {
           percentile: standing.rows[0].percentile_pooled,
         }
       : null,
+  };
+}
+
+export interface ProfileModeStats {
+  mode: "pompeu" | "killian";
+  gamesStarted: number;
+  gamesCompleted: number;
+  meanHits: number | null;
+  bestHits: number | null;
+  meanScore: number | null;
+  bestScore: number | null;
+  bestStreak: number | null;
+  pctLexicon: number | null;
+  pctLo: number | null;
+  pctHi: number | null;
+  percentile: number | null;
+}
+
+export interface ProfileRecentGame {
+  gameId: string;
+  mode: "pompeu" | "killian";
+  status: "in_progress" | "completed" | "abandoned";
+  startedAt: string;
+  finishedAt: string | null;
+  nCorrect: number | null;
+  score: number | null;
+  bestStreak: number | null;
+}
+
+export interface ProfileSeenItem {
+  itemId: number;
+  form: string;
+  isWord: boolean;
+  timesSeen: number;
+  lastSeenAt: string;
+}
+
+export interface ProfileView {
+  profile: PlayerProfile;
+  stats: ProfileModeStats[];
+  seenCounts: { words: number; pseudowords: number };
+  seenItems: ProfileSeenItem[];
+  seenKind: "word" | "pseudo";
+  seenPage: number;
+  seenPageCount: number;
+  recentGames: ProfileRecentGame[];
+}
+
+/** Vista privada del perfil: les exposicions inclouen també ítems servits
+ * abans d'arribar a registrar una resposta. */
+export async function getProfileView(
+  playerId: string,
+  seenKind: "word" | "pseudo" = "word",
+  seenPage = 1,
+): Promise<ProfileView> {
+  const pageSize = 80;
+  const page = Math.max(1, Math.floor(seenPage));
+  const [profile, statsRes, countsRes, seenItemsRes, seenTotalRes, recentRes] = await Promise.all([
+    getPlayerProfile(playerId),
+    query<{
+      mode: "pompeu" | "killian";
+      games_started: string;
+      games_completed: string;
+      mean_hits: number | null;
+      best_hits: number | null;
+      mean_score: number | null;
+      best_score: number | null;
+      best_streak: number | null;
+      pct_lexicon: number | null;
+      pct_lo: number | null;
+      pct_hi: number | null;
+      percentile: number | null;
+    }>(
+      `SELECT g.mode,
+              COUNT(*)::int AS games_started,
+              COUNT(*) FILTER (WHERE g.status = 'completed')::int AS games_completed,
+              AVG(gr.n_correct) FILTER (WHERE g.status = 'completed' AND g.mode = 'pompeu')::float AS mean_hits,
+              MAX(gr.n_correct) FILTER (WHERE g.status = 'completed' AND g.mode = 'pompeu')::int AS best_hits,
+              AVG(gr.score) FILTER (WHERE g.status = 'completed')::float AS mean_score,
+              MAX(gr.score) FILTER (WHERE g.status = 'completed')::int AS best_score,
+              MAX(gr.best_streak) FILTER (WHERE g.status = 'completed' AND g.mode = 'killian')::int AS best_streak,
+              MAX(ps.pct_lexicon)::float AS pct_lexicon,
+              MAX(ps.pct_lo)::float AS pct_lo,
+              MAX(ps.pct_hi)::float AS pct_hi,
+              MAX(ps.percentile_pooled)::float AS percentile
+       FROM games g
+       LEFT JOIN game_results gr ON gr.game_id = g.id
+       LEFT JOIN player_standings ps ON ps.player_id = g.player_id AND g.mode = 'pompeu'
+       WHERE g.player_id = $1
+       GROUP BY g.mode
+       ORDER BY g.mode`,
+      [playerId],
+    ),
+    query<{ words: string; pseudowords: string }>(
+      `SELECT COUNT(*) FILTER (WHERE i.is_word)::int AS words,
+              COUNT(*) FILTER (WHERE NOT i.is_word)::int AS pseudowords
+       FROM item_exposure e JOIN items i ON i.item_id = e.item_id
+       WHERE e.player_id = $1`,
+      [playerId],
+    ),
+    query<{ item_id: number; form: string; is_word: boolean; times_seen: number; last_seen_at: Date }>(
+      `SELECT e.item_id, i.form, i.is_word, e.times_seen, e.last_seen_at
+       FROM item_exposure e JOIN items i ON i.item_id = e.item_id
+       WHERE e.player_id = $1 AND i.is_word = $2
+       ORDER BY lower(i.form), e.item_id
+       LIMIT $3 OFFSET $4`,
+      [playerId, seenKind === "word", pageSize, (page - 1) * pageSize],
+    ),
+    query<{ n: string }>(
+      `SELECT COUNT(*) AS n
+       FROM item_exposure e JOIN items i ON i.item_id = e.item_id
+       WHERE e.player_id = $1 AND i.is_word = $2`,
+      [playerId, seenKind === "word"],
+    ),
+    query<{
+      id: string;
+      mode: "pompeu" | "killian";
+      status: "in_progress" | "completed" | "abandoned";
+      started_at: Date;
+      finished_at: Date | null;
+      n_correct: number | null;
+      score: number | null;
+      best_streak: number | null;
+    }>(
+      `SELECT g.id, g.mode, g.status, g.started_at, g.finished_at,
+              gr.n_correct, gr.score, gr.best_streak
+       FROM games g
+       LEFT JOIN game_results gr ON gr.game_id = g.id
+       WHERE g.player_id = $1
+       ORDER BY g.started_at DESC
+       LIMIT 12`,
+      [playerId],
+    ),
+  ]);
+
+  const totalSeen = Number(seenTotalRes.rows[0]?.n ?? 0);
+  return {
+    profile,
+    stats: statsRes.rows.map((r) => ({
+      mode: r.mode,
+      gamesStarted: Number(r.games_started),
+      gamesCompleted: Number(r.games_completed),
+      meanHits: r.mean_hits === null ? null : Number(r.mean_hits),
+      bestHits: r.best_hits === null ? null : Number(r.best_hits),
+      meanScore: r.mean_score === null ? null : Number(r.mean_score),
+      bestScore: r.best_score === null ? null : Number(r.best_score),
+      bestStreak: r.best_streak === null ? null : Number(r.best_streak),
+      pctLexicon: r.pct_lexicon === null ? null : Number(r.pct_lexicon),
+      pctLo: r.pct_lo === null ? null : Number(r.pct_lo),
+      pctHi: r.pct_hi === null ? null : Number(r.pct_hi),
+      percentile: r.percentile === null ? null : Number(r.percentile),
+    })),
+    seenCounts: {
+      words: Number(countsRes.rows[0]?.words ?? 0),
+      pseudowords: Number(countsRes.rows[0]?.pseudowords ?? 0),
+    },
+    seenItems: seenItemsRes.rows.map((r) => ({
+      itemId: Number(r.item_id),
+      form: r.form,
+      isWord: r.is_word,
+      timesSeen: Number(r.times_seen),
+      lastSeenAt: new Date(r.last_seen_at).toISOString(),
+    })),
+    seenKind,
+    seenPage: page,
+    seenPageCount: Math.max(1, Math.ceil(totalSeen / pageSize)),
+    recentGames: recentRes.rows.map((r) => ({
+      gameId: r.id,
+      mode: r.mode,
+      status: r.status,
+      startedAt: new Date(r.started_at).toISOString(),
+      finishedAt: r.finished_at ? new Date(r.finished_at).toISOString() : null,
+      nCorrect: r.n_correct === null ? null : Number(r.n_correct),
+      score: r.score === null ? null : Number(r.score),
+      bestStreak: r.best_streak === null ? null : Number(r.best_streak),
+    })),
   };
 }

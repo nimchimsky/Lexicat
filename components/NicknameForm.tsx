@@ -3,9 +3,19 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export default function NicknameForm() {
+export default function NicknameForm({
+  initialNickname = "",
+  redirectTo = "/joc",
+  labelText = "Sobrenom públic",
+  submitLabel = "Comença a jugar",
+}: {
+  initialNickname?: string;
+  redirectTo?: string;
+  labelText?: string;
+  submitLabel?: string;
+}) {
   const router = useRouter();
-  const [nickname, setNickname] = useState("");
+  const [nickname, setNickname] = useState(initialNickname);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -21,7 +31,7 @@ export default function NicknameForm() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Error");
-      router.push("/joc");
+      router.push(redirectTo);
       router.refresh();
     } catch (e2) {
       setErr((e2 as Error).message);
@@ -31,7 +41,9 @@ export default function NicknameForm() {
 
   return (
     <form onSubmit={submit}>
+      <label htmlFor="nickname-input">{labelText}</label>
       <input
+        id="nickname-input"
         type="text"
         required
         minLength={3}
@@ -43,7 +55,7 @@ export default function NicknameForm() {
       />
       {err && <p style={{ color: "var(--bad)" }}>{err}</p>}
       <button className="btn" disabled={busy} type="submit">
-        {busy ? "Guardant…" : "Comença a jugar"}
+        {busy ? "Guardant…" : submitLabel}
       </button>
     </form>
   );

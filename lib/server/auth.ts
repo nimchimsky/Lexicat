@@ -99,6 +99,9 @@ async function issueSession(playerId: string): Promise<void> {
  * amb correu, conservar tot l'historial (redeemMagicToken fa l'upgrade).
  */
 export async function createGuestSession(): Promise<{ playerId: string }> {
+  const existing = await currentPlayer();
+  if (existing) return { playerId: existing.id };
+
   const playerId = crypto.randomUUID();
   const suffix = crypto.randomBytes(4).toString("hex");
   await query(
@@ -110,11 +113,11 @@ export async function createGuestSession(): Promise<{ playerId: string }> {
 }
 
 /** Jugador de la sessió actual, si n'hi ha un de vàlid i no esborrat. */
-export async function currentPlayer(): Promise<{ id: string; email: string; nickname: string | null } | null> {
+export async function currentPlayer(): Promise<{ id: string; email: string | null; nickname: string | null } | null> {
   const jar = await cookies();
   const raw = jar.get(SESSION_COOKIE)?.value;
   if (!raw) return null;
-  const res = await query<{ id: string; email: string; nickname: string | null }>(
+  const res = await query<{ id: string; email: string | null; nickname: string | null }>(
     `SELECT p.id, p.email::text AS email, p.nickname
      FROM sessions s JOIN players p ON p.id = s.player_id
      WHERE s.token_hash = $1 AND s.expires_at > now() AND p.deleted_at IS NULL`,
@@ -123,7 +126,7 @@ export async function currentPlayer(): Promise<{ id: string; email: string; nick
   return res.rows[0] ?? null;
 }
 
-export async function requirePlayer(): Promise<{ id: string; email: string; nickname: string | null }> {
+export async function requirePlayer(): Promise<{ id: string; email: string | null; nickname: string | null }> {
   const p = await currentPlayer();
   if (!p) throw new HttpError(401, "Sessió requerida");
   return p;
@@ -160,6 +163,7 @@ export async function deleteAccount(playerId: string): Promise<void> {
   await query(`DELETE FROM sessions WHERE player_id = $1`, [playerId]);
   await query(`DELETE FROM auth_tokens WHERE email = (SELECT email FROM players WHERE id = $1)`, [playerId]);
   await query(`DELETE FROM player_standings WHERE player_id = $1`, [playerId]);
+  await query(`DELETE FROM player_profiles WHERE player_id = $1`, [playerId]);
   await query(
     `UPDATE players SET
        email = NULL,

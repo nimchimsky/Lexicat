@@ -16,6 +16,12 @@ export default function Privadesa() {
           <b>Sobrenom públic:</b> el que tries tu; apareix als rànquings.
         </li>
         <li>
+          <b>Perfil opcional:</b> edat, gènere, lloc de naixement, lloc de
+          residència, nivell d&apos;estudis, nombre de llengües i si el català és
+          llengua nadiua. Només es desa si tu l&apos;omples, i serveix per a anàlisis
+          agregades; no canvia la puntuació ni apareix als rànquings.
+        </li>
+        <li>
           <b>Respostes al joc:</b> estímul, confiança declarada, temps de
           resposta, posició dins la partida, format utilitzat, classe de
           dispositiu i quantes partides duies. Són la matèria del calibratge
@@ -39,13 +45,14 @@ export default function Privadesa() {
       <p>
         Les respostes es conserven indefinidament com a registre científic
         agregat: sense elles no es pot recalibrar el joc ni mantenir-lo just.
-        Les dades identificatives (correu) duren mentre tinguis el compte.
+        Les dades identificatives (correu i perfil opcional) duren mentre tinguis
+        el compte.
       </p>
 
       <h2>Com s&apos;esborra</h2>
       <p>
         A «El meu compte» tens el botó d&apos;esborrar. Quan l&apos;uses: el correu
-        desapareix de la base de dades, el sobrenom passa a un identificador opac
+        desapareixen de la base de dades, el sobrenom passa a un identificador opac
         i les sessions i tokens es destrueixen. <b>Les respostes ja entrada al
         calibratge es conserven però completament deslligades de cap persona
         identificable</b>: formen part de paràmetres estadístics agregats (la

@@ -16,8 +16,8 @@
     "db:ingest": "tsx scripts/ingest-item-bank.ts",
     "db:setup": "tsx scripts/migrate.ts && tsx scripts/ingest-item-bank.ts",
     "simulate": "tsx scripts/simulate.ts",
-    "test": "vitest run tests/psychometrics.test.ts tests/mapa.test.ts tests/killian.test.ts",
-    "test:integration": "vitest run tests/integration.acceptance.test.ts"
+    "test": "vitest run tests/psychometrics.test.ts tests/mapa.test.ts tests/killian.test.ts --configLoader native",
+    "test:integration": "vitest run tests/integration.acceptance.test.ts --configLoader native"
   },
   "dependencies": {
     "dotenv": "^17.2.1",

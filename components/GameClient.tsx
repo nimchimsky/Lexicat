@@ -17,6 +17,19 @@ export interface GameClientProps {
 
 type Phase = "loading" | "playing" | "submitting" | "retry" | "done";
 
+type PendingSubmission = {
+  body: {
+    responseId: string;
+    gameId: string;
+    position: number;
+    confidence: number;
+    timeToFirstInputMs: number | null;
+    responseTimeMs: number;
+    nAdjustments: number;
+  };
+  position: number;
+};
+
 /**
  * Pantalla de partida. Sense cap feedback per ítem: ni color, ni so, ni marcador.
  * Cada resposta porta un UUID generat al client (idempotència §8.5) i mesures
@@ -61,6 +74,7 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
   const responseId = useRef<string>("");
   const sliderRef = useRef<HTMLInputElement | null>(null);
   const submitLock = useRef<boolean>(false);
+  const pendingSubmission = useRef<PendingSubmission | null>(null);
 
   const newResponseId = () => {
     responseId.current = crypto.randomUUID();
@@ -150,26 +164,29 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
     if (!gameId || !item) return;
     setPhase("submitting");
     const now = performance.now();
+    const body: PendingSubmission["body"] = {
+      responseId: responseId.current,
+      gameId,
+      position: item.position,
+      confidence,
+      timeToFirstInputMs:
+        firstInputAt.current !== null ? Math.round(firstInputAt.current - shownAt.current) : null,
+      responseTimeMs: Math.round(now - shownAt.current),
+      nAdjustments: adjustments.current,
+    };
+    pendingSubmission.current = { body, position: item.position };
     try {
       const res = await fetch("/api/game/response", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          responseId: responseId.current,
-          gameId,
-          position: item.position,
-          confidence,
-          timeToFirstInputMs:
-            firstInputAt.current !== null ? Math.round(firstInputAt.current - shownAt.current) : null,
-          responseTimeMs: Math.round(now - shownAt.current),
-          nAdjustments: adjustments.current,
-        }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? `HTTP ${res.status}`);
       }
       const data = await res.json();
+      pendingSubmission.current = null;
       if (data.finished) {
         router.push(`/resultats/${gameId}`);
         return;
@@ -177,6 +194,33 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
       await loadItem(gameId, item.position + 1);
     } catch (e) {
       // Reenviament segur: mateix response_id, el servidor és idempotent.
+      setError((e as Error).message);
+      setPhase("retry");
+    }
+  }
+
+  async function retryPendingSubmission() {
+    const pending = pendingSubmission.current;
+    if (!pending) return;
+    setPhase("submitting");
+    try {
+      const res = await fetch("/api/game/response", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(pending.body),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      pendingSubmission.current = null;
+      if (data.finished) {
+        router.push(`/resultats/${pending.body.gameId}`);
+        return;
+      }
+      await loadItem(pending.body.gameId, pending.position + 1);
+    } catch (e) {
       setError((e as Error).message);
       setPhase("retry");
     }
@@ -222,7 +266,8 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
           className="btn"
           onClick={() => {
             setError(null);
-            if (gameId && item) void loadItem(gameId, item.position);
+            if (pendingSubmission.current) void retryPendingSubmission();
+            else if (gameId && item) void loadItem(gameId, item.position);
             else void startGame();
           }}
         >

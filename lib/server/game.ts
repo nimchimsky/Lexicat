@@ -53,6 +53,18 @@ export interface StartedGame {
   mode: GameMode;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function assertUuid(value: string, field: string): void {
+  if (!UUID_RE.test(value)) throw new HttpError(400, `${field} invàlid`);
+}
+
+function finiteNonNegative(value: number | null, field: string): number | null {
+  if (value === null) return null;
+  if (!Number.isFinite(value) || value < 0) throw new HttpError(400, `${field} fora de rang`);
+  return Math.round(value);
+}
+
 export async function startGame(
   playerId: string,
   deviceClass: string | null,
@@ -62,6 +74,11 @@ export async function startGame(
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
+
+    // Lock the player row as well as existing games. Without this, two
+    // concurrent clicks can both observe no open game and create two games.
+    const player = await client.query(`SELECT id FROM players WHERE id = $1 FOR UPDATE`, [playerId]);
+    if (player.rowCount === 0) throw new HttpError(404, "Jugador no trobat");
 
     // Qualsevol partida anterior en curs queda abandonada en començar una de nova.
     const open = await client.query<{ id: string }>(
@@ -220,13 +237,27 @@ export async function serveItem(
   gameId: string,
   position: number
 ): Promise<{ position: number; stimulus: string; totalItems: number }> {
-  const g = await query<{ status: string; player_id: string }>(
-    `SELECT status, player_id FROM games WHERE id = $1`,
+  assertUuid(gameId, "gameId");
+  const g = await query<{
+    status: string; player_id: string; player_game_index: number; mode: GameMode; answered: string;
+  }>(
+    `SELECT g.status, g.player_id, g.player_game_index, g.mode,
+            (SELECT COUNT(*) FROM responses r WHERE r.game_id = g.id) AS answered
+     FROM games g WHERE g.id = $1`,
     [gameId]
   );
   if (g.rowCount === 0) throw new HttpError(404, "Partida no trobada");
   if (g.rows[0].player_id !== playerId) throw new HttpError(403, "Partida d'un altre jugador");
   if (g.rows[0].status !== "in_progress") throw new HttpError(409, "La partida no està en curs");
+
+  const nextPosition = Number(g.rows[0].answered) + 1;
+  // Kilian prefetches exactly one item during the feedback window. Pompeu has
+  // no prefetch. In both modes, arbitrary reads of the future composition are
+  // rejected while allowing safe retries of already served positions.
+  const maxPosition = nextPosition + (g.rows[0].mode === "killian" ? 1 : 0);
+  if (!Number.isInteger(position) || position < 1 || position > maxPosition) {
+    throw new HttpError(409, `Posició fora de la finestra de joc: esperada ${nextPosition}`);
+  }
 
   const item = await query<{ form: string }>(
     `SELECT i.form
@@ -237,10 +268,6 @@ export async function serveItem(
   if (item.rowCount === 0) throw new HttpError(404, "Posició no trobada");
 
   // L'exposició es registra quan es serveix: és el que sosté el refredament.
-  const idx = await query<{ player_game_index: number }>(
-    `SELECT player_game_index FROM games WHERE id = $1`,
-    [gameId]
-  );
   const itemIdRow = await query<{ item_id: number }>(
     `SELECT item_id FROM game_items WHERE game_id = $1 AND position = $2`,
     [gameId, position]
@@ -251,9 +278,15 @@ export async function serveItem(
      ON CONFLICT (player_id, item_id) DO UPDATE
      SET last_game_id = EXCLUDED.last_game_id,
          last_game_index = EXCLUDED.last_game_index,
-         last_seen_at = now(),
-         times_seen = item_exposure.times_seen + 1`,
-    [playerId, itemIdRow.rows[0].item_id, gameId, idx.rows[0].player_game_index]
+         last_seen_at = CASE
+           WHEN item_exposure.last_game_id = EXCLUDED.last_game_id THEN item_exposure.last_seen_at
+           ELSE now()
+         END,
+         times_seen = CASE
+           WHEN item_exposure.last_game_id = EXCLUDED.last_game_id THEN item_exposure.times_seen
+           ELSE item_exposure.times_seen + 1
+         END`,
+    [playerId, itemIdRow.rows[0].item_id, gameId, g.rows[0].player_game_index]
   );
 
   return { position, stimulus: item.rows[0].form, totalItems: 100 };
@@ -293,9 +326,14 @@ export async function submitResponse(
   },
   deviceClass: string | null
 ): Promise<SubmittedResponse> {
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.responseId)) {
-    throw new HttpError(400, "response_id invàlid");
+  assertUuid(input.responseId, "response_id");
+  assertUuid(input.gameId, "gameId");
+  if (!Number.isInteger(input.position) || input.position < 1) {
+    throw new HttpError(400, "position invàlid");
   }
+  const timeToFirstInputMs = finiteNonNegative(input.timeToFirstInputMs, "Temps fins a primera entrada");
+  const responseTimeMs = finiteNonNegative(input.responseTimeMs, "Temps de resposta");
+  const nAdjustments = finiteNonNegative(input.nAdjustments, "Nombre d'ajustos");
 
   const client = await getPool().connect();
   try {
@@ -317,19 +355,22 @@ export async function submitResponse(
     if (g.rowCount === 0) throw new HttpError(404, "Partida no trobada");
     const game = g.rows[0];
     if (game.player_id !== playerId) throw new HttpError(403, "Partida d'un altre jugador");
-    if (game.status !== "in_progress") throw new HttpError(409, "La partida ja s'ha tancat");
-    const isKillian = game.mode === "killian";
 
     // Idempotència (§8.5): un reenviament del MATEIX response_id surt exitós
     // sense crear cap fila nova, encara que la partida hagi avançat.
-    const dupe = await client.query<{ n: string }>(
-      `SELECT COUNT(*) AS n FROM responses WHERE response_id = $1 AND game_id = $2`,
-      [input.responseId, input.gameId]
+    const dupe = await client.query<{ game_id: string }>(
+      `SELECT game_id FROM responses WHERE response_id = $1`,
+      [input.responseId]
     );
-    if (Number(dupe.rows[0].n) > 0) {
+    if (dupe.rowCount !== 0) {
+      if (dupe.rows[0].game_id !== input.gameId) {
+        throw new HttpError(409, "response_id ja utilitzat");
+      }
       await client.query("COMMIT");
-      return { duplicate: true, finished: false };
+      return { duplicate: true, finished: game.status === "completed" };
     }
+    if (game.status !== "in_progress") throw new HttpError(409, "La partida ja s'ha tancat");
+    const isKillian = game.mode === "killian";
 
     // Validació estricta d'ordre: la posició ha de ser exactament la següent.
     const countRes = await client.query<{ n: string }>(
@@ -436,14 +477,14 @@ export async function submitResponse(
         game.slider_steps,
         isCorrectStored,
         !isKillian && confidence === 0.5,
-        input.responseTimeMs !== null && input.responseTimeMs < MIN_RT_MS,
+        responseTimeMs !== null && responseTimeMs < MIN_RT_MS,
         VERSIONS.itemBank,
         VERSIONS.referenceCorpus,
         VERSIONS.calibration,
         game.scoring_version,
-        isKillian ? null : input.timeToFirstInputMs,
-        isKillian ? elapsedMs : input.responseTimeMs,
-        isKillian ? null : input.nAdjustments,
+        isKillian ? null : timeToFirstInputMs,
+        isKillian ? elapsedMs : responseTimeMs,
+        isKillian ? null : nAdjustments,
         deviceClass ?? game.device_class,
         game.player_game_index - 1,
         game.mode,
@@ -456,7 +497,19 @@ export async function submitResponse(
       ]
     );
 
-    const duplicate = ins.rowCount === 0;
+    let duplicate = ins.rowCount === 0;
+    if (duplicate) {
+      // A concurrent request can win the response_id race after the initial
+      // lookup. Never treat a token that belongs to another game as a valid
+      // retry.
+      const conflict = await client.query<{ game_id: string }>(
+        `SELECT game_id FROM responses WHERE response_id = $1`,
+        [input.responseId]
+      );
+      if (conflict.rowCount === 0 || conflict.rows[0].game_id !== input.gameId) {
+        throw new HttpError(409, "response_id ja utilitzat");
+      }
+    }
 
     const totalRes = await client.query<{ n: string }>(
       `SELECT COUNT(*) AS n FROM responses WHERE game_id = $1`,
