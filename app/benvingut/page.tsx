@@ -15,8 +15,9 @@ export default async function Benvingut({
   const { error } = await searchParams;
   return (
     <main>
+      <p className="eyebrow">Benvingut</p>
       <h1>Escull el teu sobrenom</h1>
-      <p className="muted">
+      <p className="lead">
         És com apareixeràs als rànquings. Pots posar el que vulguis; el teu
         correu queda privat.
       </p>

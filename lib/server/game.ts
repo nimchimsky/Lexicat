@@ -20,7 +20,18 @@ import {
   RANKING_WINDOW,
   ABANDON_AFTER_MS,
   INSTABILITY_SE,
+  GAME_LENGTH,
+  type GameMode,
+  KILIAN_BAR_MS,
+  KILIAN_GRACE_MS,
+  KILIAN_YES_CONFIDENCE,
+  KILIAN_NO_CONFIDENCE,
 } from "../config";
+import {
+  kilianMultiplier,
+  kilianHitPoints,
+  type KillianKind,
+} from "../game/kilian";
 
 /** Marca com a abandonades (inactivitat) les partides in_progress molt velles. */
 export async function sweepAbandonedGames(playerId?: string): Promise<void> {
@@ -39,11 +50,13 @@ export interface StartedGame {
   playerGameIndex: number;
   responseFormat: string;
   sliderSteps: number | null;
+  mode: GameMode;
 }
 
 export async function startGame(
   playerId: string,
-  deviceClass: string | null
+  deviceClass: string | null,
+  mode: GameMode = "pompeu"
 ): Promise<StartedGame> {
   const bank = await loadBank();
   const client = await getPool().connect();
@@ -86,11 +99,12 @@ export async function startGame(
     const selection = selectGameItems(selectable, exposures, rng, playerGameIndex, COOLDOWN_GAMES);
 
     const gameId = crypto.randomUUID();
+    const responseFormat = mode === "killian" ? "binary" : ACTIVE_RESPONSE_FORMAT;
     await client.query(
       `INSERT INTO games (id, player_id, player_game_index, game_seed,
                           item_bank_version, reference_corpus_version, calibration_version,
-                          scoring_version, response_format, slider_steps, device_class, relaxed_strata)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+                          scoring_version, response_format, slider_steps, device_class, relaxed_strata, mode)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
       [
         gameId,
         playerId,
@@ -99,11 +113,12 @@ export async function startGame(
         VERSIONS.itemBank,
         VERSIONS.referenceCorpus,
         VERSIONS.calibration,
-        VERSIONS.scoring,
-        ACTIVE_RESPONSE_FORMAT,
-        ACTIVE_RESPONSE_FORMAT === "slider" ? SLIDER_STEPS : null,
+        mode === "killian" ? VERSIONS.kilianScoring : VERSIONS.scoring,
+        responseFormat,
+        responseFormat === "slider" ? SLIDER_STEPS : null,
         deviceClass,
         JSON.stringify({ cooldown: selection.relaxedStrata, lemma: selection.lemmaRelaxedStrata }),
+        mode,
       ]
     );
 
@@ -129,7 +144,13 @@ export async function startGame(
     }
 
     await client.query("COMMIT");
-    return { gameId, playerGameIndex, responseFormat: ACTIVE_RESPONSE_FORMAT, sliderSteps: ACTIVE_RESPONSE_FORMAT === "slider" ? SLIDER_STEPS : null };
+    return {
+      gameId,
+      playerGameIndex,
+      responseFormat,
+      sliderSteps: responseFormat === "slider" ? SLIDER_STEPS : null,
+      mode,
+    };
   } catch (e) {
     await client.query("ROLLBACK");
     throw e;
@@ -144,6 +165,10 @@ export interface GameState {
   totalItems: number;
   responseFormat: string;
   sliderSteps: number | null;
+  mode: GameMode;
+  /** Només killian: punts acumulats i ratxa vigent, per reprenre la partida. */
+  scoreSoFar?: number;
+  streakNow?: number;
 }
 
 export async function getOpenGame(playerId: string): Promise<GameState | null> {
@@ -151,9 +176,10 @@ export async function getOpenGame(playerId: string): Promise<GameState | null> {
     id: string;
     response_format: string;
     slider_steps: number | null;
+    mode: GameMode;
     answered: string;
   }>(
-    `SELECT g.id, g.response_format, g.slider_steps,
+    `SELECT g.id, g.response_format, g.slider_steps, g.mode,
             (SELECT COUNT(*) FROM responses r WHERE r.game_id = g.id) AS answered
      FROM games g
      WHERE g.player_id = $1 AND g.status = 'in_progress'
@@ -162,13 +188,27 @@ export async function getOpenGame(playerId: string): Promise<GameState | null> {
   );
   if (res.rowCount === 0) return null;
   const g = res.rows[0];
-  return {
+  const state: GameState = {
     gameId: g.id,
     nextPosition: Number(g.answered) + 1,
-    totalItems: 100,
+    totalItems: GAME_LENGTH,
     responseFormat: g.response_format,
     sliderSteps: g.slider_steps,
+    mode: g.mode,
   };
+  if (g.mode === "killian") {
+    const k = await query<{ score_so_far: string; streak_now: number | null }>(
+      `SELECT COALESCE(SUM(points), 0)::int AS score_so_far,
+              (SELECT streak_after FROM responses WHERE game_id = $1
+               ORDER BY position_in_game DESC LIMIT 1) AS streak_now
+       FROM responses
+       WHERE game_id = $1`,
+      [g.id]
+    );
+    state.scoreSoFar = Number(k.rows[0].score_so_far);
+    state.streakNow = k.rows[0].streak_now ?? 0;
+  }
+  return state;
 }
 
 /**
@@ -222,6 +262,17 @@ export async function serveItem(
 export interface SubmittedResponse {
   duplicate: boolean;
   finished: boolean;
+  /** Només killian: resultat de l'ítem acabat de puntuar, per al feedback.
+   *  `itemWasWord` es revela UN COP registrada la resposta (§9). */
+  outcome?: {
+    isCorrect: boolean;
+    kind: KillianKind;
+    points: number;
+    streakAfter: number;
+    multiplier: number;
+    scoreSoFar: number;
+    itemWasWord: boolean;
+  };
 }
 
 export async function submitResponse(
@@ -234,14 +285,16 @@ export async function submitResponse(
     timeToFirstInputMs: number | null;
     responseTimeMs: number | null;
     nAdjustments: number | null;
+    // --- Només killian ---
+    kind?: "answer" | "timeout";
+    choice?: "yes" | "no";
+    elapsedMs?: number | null;
+    inputMethod?: "swipe" | "button" | "key" | null;
   },
   deviceClass: string | null
 ): Promise<SubmittedResponse> {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.responseId)) {
     throw new HttpError(400, "response_id invàlid");
-  }
-  if (!(input.confidence >= 0 && input.confidence <= 1)) {
-    throw new HttpError(400, "confiança fora de [0,1]");
   }
 
   const client = await getPool().connect();
@@ -256,12 +309,16 @@ export async function submitResponse(
       response_format: string;
       slider_steps: number | null;
       device_class: string | null;
-    }>(`SELECT id, player_id, status, player_game_index, response_format, slider_steps, device_class
+      scoring_version: string;
+      mode: GameMode;
+    }>(`SELECT id, player_id, status, player_game_index, response_format, slider_steps,
+               device_class, scoring_version, mode
         FROM games WHERE id = $1 FOR UPDATE`, [input.gameId]);
     if (g.rowCount === 0) throw new HttpError(404, "Partida no trobada");
     const game = g.rows[0];
     if (game.player_id !== playerId) throw new HttpError(403, "Partida d'un altre jugador");
     if (game.status !== "in_progress") throw new HttpError(409, "La partida ja s'ha tancat");
+    const isKillian = game.mode === "killian";
 
     // Idempotència (§8.5): un reenviament del MATEIX response_id surt exitós
     // sense crear cap fila nova, encara que la partida hagi avançat.
@@ -291,8 +348,68 @@ export async function submitResponse(
     if (gi.rowCount === 0) throw new HttpError(404, "Ítem no servit en aquesta posició");
     const giRow = gi.rows[0];
 
-    // Desempat coherent amb tot el sistema: confiança exactament 0,5 → "no".
-    const isCorrect = (input.confidence > 0.5) === giRow.is_word;
+    let confidence: number | null = null;
+    let responseKind: KillianKind = "answer";
+    let elapsedMs: number | null = null;
+    let points: number | null = null;
+    let streakAfter: number | null = null;
+    let multiplier: number | null = null;
+
+    if (isKillian) {
+      responseKind = input.kind === "timeout" ? "timeout" : "answer";
+      if (responseKind === "answer" && input.choice !== "yes" && input.choice !== "no") {
+        throw new HttpError(400, "Falta el judici sí/no");
+      }
+      const rawElapsed = Math.round(Number(input.elapsedMs ?? 0));
+      if (!Number.isFinite(rawElapsed) || rawElapsed < 0) {
+        throw new HttpError(400, "Temps de resposta fora de rang");
+      }
+      // El servidor retalla SEMPRE al seu rang (barra + marge de gràcia) i mai
+      // rebuja per llarg: un timeout automàtic després d'una pestanya amagada
+      // ha de registrar-se com un timeout normal, no petar amb un 400.
+      elapsedMs = Math.min(rawElapsed, KILIAN_BAR_MS + KILIAN_GRACE_MS);
+
+      const saidYes = input.choice === "yes";
+      const isCorrect = responseKind === "answer" && saidYes === giRow.is_word;
+
+      // Ratxa vigent abans d'aquesta resposta: l'últim streak_after persistit
+      // ÉS l'única font de veritat. Un encert massa ràpid (<200 ms) es desa amb
+      // ratxa 0 i així no pot ressuscitar mai al recompte següent.
+      const prior = await client.query<{ streak_after: number | null }>(
+        `SELECT streak_after FROM responses
+         WHERE game_id = $1 ORDER BY position_in_game DESC LIMIT 1`,
+        [input.gameId]
+      );
+      const prevStreak = prior.rows[0]?.streak_after ?? 0;
+
+      streakAfter = isCorrect ? prevStreak + 1 : 0;
+      multiplier = isCorrect ? kilianMultiplier(streakAfter) : null;
+
+      // Anti-espam: sota el llindar de RT no hi ha punts ni ratxa (es marca,
+      // no s'esborra; ≥20% marca tota la partida com a suspect_fast).
+      const tooFast = elapsedMs < MIN_RT_MS;
+      if (tooFast) streakAfter = 0;
+      points = isCorrect && !tooFast ? kilianHitPoints(elapsedMs!, streakAfter) : 0;
+
+      confidence =
+        responseKind === "answer"
+          ? saidYes ? KILIAN_YES_CONFIDENCE : KILIAN_NO_CONFIDENCE
+          : null; // un timeout no és cap judici de confiança
+
+      multiplier = isCorrect && !tooFast ? multiplier : null;
+    } else {
+      if (!(input.confidence >= 0 && input.confidence <= 1)) {
+        throw new HttpError(400, "confiança fora de [0,1]");
+      }
+      confidence = input.confidence;
+    }
+
+    // Desempat coherent amb tot el sistema (pompeu): confiança exactament
+    // 0,5 → "no". A killian el judici ja és binari i no hi passa mai.
+    const isCorrectStored =
+      isKillian
+        ? responseKind === "answer" && (input.choice === "yes") === giRow.is_word
+        : (confidence as number) > 0.5 === giRow.is_word;
 
     // Idempotència (§8.5): mateix response_id → una sola fila; el constraint
     // únic (game_id, item_id) impedeix dues respostes per al mateix ítem.
@@ -301,8 +418,10 @@ export async function submitResponse(
            stratum_id, is_word, confidence, response_format, slider_steps, is_correct, fifty_fifty,
            rt_below_threshold, item_bank_version, reference_corpus_version, calibration_version,
            scoring_version, time_to_first_input_ms, response_time_ms, n_adjustments,
-           device_class, n_previous_games)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+           device_class, n_previous_games, mode, response_kind, elapsed_ms, input_method,
+           points, streak_after, multiplier)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,
+               $23,$24,$25,$26,$27,$28,$29)
        ON CONFLICT (response_id) DO NOTHING`,
       [
         input.responseId,
@@ -312,21 +431,28 @@ export async function submitResponse(
         input.position,
         giRow.stratum_id,
         giRow.is_word,
-        input.confidence,
+        confidence,
         game.response_format,
         game.slider_steps,
-        isCorrect,
-        input.confidence === 0.5,
+        isCorrectStored,
+        !isKillian && confidence === 0.5,
         input.responseTimeMs !== null && input.responseTimeMs < MIN_RT_MS,
         VERSIONS.itemBank,
         VERSIONS.referenceCorpus,
         VERSIONS.calibration,
-        VERSIONS.scoring,
-        input.timeToFirstInputMs,
-        input.responseTimeMs,
-        input.nAdjustments,
+        game.scoring_version,
+        isKillian ? null : input.timeToFirstInputMs,
+        isKillian ? elapsedMs : input.responseTimeMs,
+        isKillian ? null : input.nAdjustments,
         deviceClass ?? game.device_class,
         game.player_game_index - 1,
+        game.mode,
+        responseKind,
+        elapsedMs,
+        input.inputMethod ?? null,
+        points,
+        streakAfter,
+        multiplier,
       ]
     );
 
@@ -338,13 +464,32 @@ export async function submitResponse(
     );
     const total = Number(totalRes.rows[0].n);
     let finished = false;
-    if (total === 100 && !duplicate) {
-      await finishGameTx(client, input.gameId);
-      finished = true;
+    let outcome: SubmittedResponse["outcome"] | undefined;
+    if (!duplicate) {
+      if (isKillian) {
+        const soFar = await client.query<{ score_so_far: string }>(
+          `SELECT COALESCE(SUM(points), 0)::int AS score_so_far FROM responses WHERE game_id = $1`,
+          [input.gameId]
+        );
+        outcome = {
+          isCorrect: isCorrectStored,
+          kind: responseKind,
+          points: points ?? 0,
+          streakAfter: streakAfter ?? 0,
+          multiplier: multiplier ?? 1,
+          scoreSoFar: Number(soFar.rows[0].score_so_far),
+          itemWasWord: giRow.is_word,
+        };
+      }
+      if (total === GAME_LENGTH) {
+        finished = true;
+        if (isKillian) await finishKillianGameTx(client, input.gameId);
+        else await finishGameTx(client, input.gameId);
+      }
     }
 
     await client.query("COMMIT");
-    return { duplicate, finished };
+    return { duplicate, finished, outcome };
   } catch (e) {
     await client.query("ROLLBACK");
     throw e;
@@ -390,6 +535,67 @@ async function finishGameTx(client: import("pg").PoolClient, gameId: string): Pr
   await recomputeStandings(client, pidRes.rows[0].player_id);
 }
 
+/**
+ * Tancament d'una partida Kilian: sense θ ni d′ (els modes no es barregen),
+ * només agregats de puntuació. Els rànquings generals de Pompeu no es toquen.
+ */
+async function finishKillianGameTx(client: import("pg").PoolClient, gameId: string): Promise<void> {
+  // Qualitat de resposta: la mateixa regla «marca, no esborris».
+  const fast = await client.query<{ n: string }>(
+    `SELECT COUNT(*) AS n FROM responses WHERE game_id = $1 AND rt_below_threshold`,
+    [gameId]
+  );
+  const fastRatio = Number(fast.rows[0].n) / GAME_LENGTH;
+  if (fastRatio >= FAST_GUESS_GAME_RATIO) {
+    await client.query(`UPDATE games SET quality_flag = 'suspect_fast' WHERE id = $1`, [gameId]);
+  }
+
+  const agg = await client.query<{
+    n: number;
+    score: number;
+    best_streak: number;
+    max_mult: number | null;
+    n_correct: number;
+    n_fa: number;
+    n_timeouts: number;
+  }>(
+    `SELECT COUNT(*)::int AS n,
+            COALESCE(SUM(points), 0)::int AS score,
+            COALESCE(MAX(streak_after), 0)::int AS best_streak,
+            MAX(multiplier)::float AS max_mult,
+            COUNT(*) FILTER (WHERE is_correct)::int AS n_correct,
+            COUNT(*) FILTER (WHERE NOT is_word AND NOT is_correct AND response_kind = 'answer')::int AS n_fa,
+            COUNT(*) FILTER (WHERE response_kind = 'timeout')::int AS n_timeouts
+     FROM responses WHERE game_id = $1`,
+    [gameId]
+  );
+  const a = agg.rows[0];
+
+  const verRes = await client.query<{ scoring_version: string; reference_corpus_version: string; calibration_version: string }>(
+    `SELECT scoring_version, reference_corpus_version, calibration_version FROM games WHERE id = $1`,
+    [gameId]
+  );
+
+  await client.query(
+    `UPDATE games SET status = 'completed', finished_at = now() WHERE id = $1`,
+    [gameId]
+  );
+  await client.query(
+    `INSERT INTO game_results (game_id, n_responses, theta, se_theta, se_total, pct_lexicon,
+        pct_lo, pct_hi, percentile, d_prime, criterion, n_correct, n_false_alarms,
+        n_fifty_fifty, score, lexicon_game_score, calibration_version, reference_corpus_version,
+        scoring_version, mode, best_streak, max_multiplier, n_timeouts)
+     VALUES ($1,$2,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,$3,$4,0,$5,NULL,$6,$7,$8,'killian',$9,$10,$11)
+     ON CONFLICT (game_id) DO NOTHING`,
+    [
+      gameId, a.n, a.n_correct, a.n_fa, a.score,
+      verRes.rows[0].calibration_version, verRes.rows[0].reference_corpus_version,
+      verRes.rows[0].scoring_version, a.best_streak, a.max_mult ?? 1, a.n_timeouts,
+    ]
+  );
+  // Cap recomputeStandings: el mode Kilian no entra mai a les taules de Pompeu.
+}
+
 type Querier = (sql: string, params?: unknown[]) => Promise<{ rows: any[]; rowCount: number | null }>;
 
 export async function computeResultForGame(
@@ -421,12 +627,14 @@ function estimatePooled(responses: GraduatedResponse[], items: Map<number, ItemP
   return estimateAbility(responses, [...items.values()]);
 }
 
-/** Recàlcul de la finestra dels rànquings generals (últimes N completes vàlides). */
+/** Recàlcul de la finestra dels rànquings generals (últimes N completes vàlides).
+ *  Només modes Pompeu: una partida Kilian mai mou l'estimació del lexicó. */
 async function recomputeStandings(client: import("pg").PoolClient, playerId: string): Promise<void> {
   const gamesRes = await client.query<{ id: string; n_correct: number; score: number }>(
     `SELECT g.id, gr.n_correct, gr.score
      FROM games g JOIN game_results gr ON gr.game_id = g.id
      WHERE g.player_id = $1 AND g.status = 'completed' AND g.quality_flag IS NULL
+       AND g.mode = 'pompeu'
      ORDER BY g.finished_at DESC LIMIT $2`,
     [playerId, RANKING_WINDOW]
   );

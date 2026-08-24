@@ -169,6 +169,37 @@ async function main() {
   }
   console.log("Upgrade convidat→compte: mateixa identitat, correu assignat ✔");
 
+  // 10) Mapa: progrés derivat de la partida completa (66 paraules reals →
+  // encara sense fitxa: el primer llindar és a ~408) i reclamació barrada.
+  const mapaRes = await fetch(`${base}/api/mapa`, { headers: { Cookie: cookieHeader } });
+  if (!mapaRes.ok) throw new Error(`API mapa: HTTP ${mapaRes.status}`);
+  const mapa = await mapaRes.json();
+  if (mapa.wordsSeen !== 66) throw new Error(`Mapa: paraules vistes ${mapa.wordsSeen} ≠ 66`);
+  if (mapa.earned !== 0 || mapa.pending !== 0) {
+    throw new Error(`Mapa: amb 66 paraules no n'hi hauria d'haver cap fitxa (${JSON.stringify(mapa)})`);
+  }
+  // Denominador coherent: el banc net exclou 4 paraules sense DIEC → 40.773.
+  if (mapa.zones !== 100 || mapa.wordsTotal !== 40773) {
+    throw new Error(`Mapa: constants inesperades ${mapa.zones}/${mapa.wordsTotal}`);
+  }
+  const claimNo = await fetch(`${base}/api/mapa/claim`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: cookieHeader },
+    body: JSON.stringify({ regionId: "catalunya--alt-camp" }),
+  });
+  if (claimNo.status !== 409) throw new Error(`Reclamació sense fitxa: HTTP ${claimNo.status} (esperat 409)`);
+  const claimBad = await fetch(`${base}/api/mapa/claim`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: cookieHeader },
+    body: JSON.stringify({ regionId: "catalunya--no-existeix" }),
+  });
+  if (claimBad.status !== 400) throw new Error(`Regió desconeguda: HTTP ${claimBad.status} (esperat 400)`);
+  const mapaPage = await fetch(`${base}/mapa`, { headers: { Cookie: cookieHeader } });
+  if (!mapaPage.ok) throw new Error(`Pàgina /mapa: HTTP ${mapaPage.status}`);
+  const svgCompact = await fetch(`${base}/mapa/paisos-catalans-100.compact.svg`);
+  if (!svgCompact.ok) throw new Error("L'SVG compacte no es serveix des de /public");
+  console.log("Mapa: progrés derivat, reclamació barrada sense fitxa, pàgina i SVG servits ✔");
+
   console.log("\nSMOKE TEST COMPLETAT AMB ÈXIT ✔");
 }
 

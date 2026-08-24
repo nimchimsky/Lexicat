@@ -1,8 +1,9 @@
-export const metadata = { title: "Protecció de dades · Mode Pompeu" };
+export const metadata = { title: "Protecció de dades · Lexicat" };
 
 export default function Privadesa() {
   return (
     <main>
+      <p className="eyebrow">Legal</p>
       <h1>Protecció de dades</h1>
 
       <h2>Què desem i per què</h2>

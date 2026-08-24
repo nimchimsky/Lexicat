@@ -6,7 +6,15 @@ export const VERSIONS = {
   referenceCorpus: "ref-1",
   calibration: "cal-1",
   scoring: "sc-1",
+  /** Puntuació del mode Kilian, independent de la sc-1 de Pompeu. */
+  kilianScoring: "ki-1",
 } as const;
+
+// -----------------------------------------------------------------------
+// Modes de joc
+// -----------------------------------------------------------------------
+
+export type GameMode = "pompeu" | "killian";
 
 // Prior N(0, 0.624²): distribució real de θ de la població de l'estudi.
 export const PRIOR_MEAN = 0;
@@ -47,8 +55,24 @@ export type ResponseFormat = "slider" | "buttons";
 /** Format actiu del desplegament: l'slider és LA mecànica del joc (decisió Roger). */
 export const ACTIVE_RESPONSE_FORMAT: ResponseFormat = "slider";
 
-/** Passos del slider. 21 = resolució del 5%. */
-export const SLIDER_STEPS = 21; // o 11
+/**
+ * Passos de l'escala de seguretat. 7 = Líkert de 7 punts (decisió Roger
+ * 2026-08-23): el centre val exactament 0,5 → cinquanta-cinc, coherent amb
+ * TIE_RULE. Les partides velles desades amb 21 passos continuen sent vàlides:
+ * el client les renderitza amb l'slider continu de tota la vida.
+ */
+export const SLIDER_STEPS = 7;
+
+/** Etiquetes del Líkert d'índex 0 («segur que NO») … índex 6 («segur que SÍ»). */
+export const SLIDER_LIKERT_LABELS = [
+  "segur que no",
+  "gairebé segur que no",
+  "probable que no",
+  "incert",
+  "probable que sí",
+  "gairebé segur que sí",
+  "segur que sí",
+] as const;
 
 /**
  * Mapatge documentat dels cinc botons discrets a probabilitats.
@@ -83,6 +107,28 @@ export const GAME_LENGTH = N_WORD_ITEMS + N_PSEUDO_ITEMS; // 100
 export const COOLDOWN_GAMES = 50;
 
 // -----------------------------------------------------------------------
+// Mode Kilian (kilian_scoring_version ki-1)
+// -----------------------------------------------------------------------
+
+/** Durada de la barra de temps d'un estímul. */
+export const KILIAN_BAR_MS = 5000;
+/** Marge del servidor per damunt de la barra abans de considerar-ho tard. */
+export const KILIAN_GRACE_MS = 300;
+/** Punts base màxims per estímul (contesten a l'instant). */
+export const KILIAN_POINTS_MAX = 100;
+/**
+ * Feedback entre ítems. Més curt quan encertes (manté el ritme) i més llarg
+ * quan falles, que és quan cal llegir què ha passat.
+ */
+export const KILIAN_FEEDBACK_HIT_MS = 420;
+export const KILIAN_FEEDBACK_MISS_MS = 700;
+/** Confiança amb què entra al model graduat cada judici binari. */
+export const KILIAN_YES_CONFIDENCE = 0.95;
+export const KILIAN_NO_CONFIDENCE = 0.05;
+/** Sostre del multiplicador (inabastable amb 100 ítems, però fixa el límit). */
+export const KILIAN_MULTIPLIER_CAP = 3;
+
+// -----------------------------------------------------------------------
 // Qualitat i integritat
 // -----------------------------------------------------------------------
 
@@ -96,3 +142,16 @@ export const ABANDON_AFTER_MS = 24 * 60 * 60 * 1000;
 
 /** Finestra dels rànquings generals. */
 export const RANKING_WINDOW = 5;
+
+// -----------------------------------------------------------------------
+// Mapa dels Països Catalans (metaprogrés de zones)
+// -----------------------------------------------------------------------
+
+/**
+ * Una zona per cada 1% del banc de paraules reals (decisió Roger 23/08/2026):
+ * 40.777 paraules → 100 zones → ~408 paraules i ~6-7 partides per zona. El
+ * recompte és de paraules reals úniques VISTES (encertades o no); les
+ * pseudoparaules no compten. Els llindars exactes els calcula
+ * lib/mapa/thresholds.ts a partir del n_words del banc vigent.
+ */
+export const MAPA_ZONES = 100;

@@ -10,13 +10,20 @@ export default async function Compte() {
   void logout;
   return (
     <main>
+      <p className="eyebrow">Compte</p>
       <h1>El meu compte</h1>
-      <p>
-        Correu: <b>{player.email}</b>
-      </p>
-      <p>
-        Sobrenom públic: <b>{player.nickname}</b>
-      </p>
+
+      <dl className="deflist">
+        <div>
+          <dt>Correu</dt>
+          <dd>{player.email || "—"}</dd>
+        </div>
+        <div>
+          <dt>Sobrenom públic</dt>
+          <dd>{player.nickname ?? "—"}</dd>
+        </div>
+      </dl>
+
       <AccountActions />
     </main>
   );

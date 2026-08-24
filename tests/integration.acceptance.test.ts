@@ -228,3 +228,315 @@ d("integració · esquema + partida + registre", () => {
     }
   });
 });
+
+d("integració · mode Kilian", () => {
+  beforeAll(async () => {
+    if (!ingestReady) {
+      const { runMigrations } = await import("../scripts/migrate-lib");
+      await runMigrations();
+      const { runIngest } = await import("../scripts/ingest-item-bank");
+      await runIngest();
+      ingestReady = true;
+    }
+  });
+
+  async function newPlayer(c: Client): Promise<string> {
+    const r = await c.query<{ id: string }>(
+      `INSERT INTO players (id, email, nickname) VALUES (gen_random_uuid(), $1, $2) RETURNING id`,
+      [`test-${Date.now()}-${Math.random().toString(36).slice(2)}@example.cat`, `jugador-${Math.random().toString(36).slice(2, 8)}`]
+    );
+    return r.rows[0].id;
+  }
+
+  it("partida kiliana sencera: punts, ratxes, resultats i separació de modes", async () => {
+    const { startGame, serveItem, submitResponse } = await import("../lib/server/game");
+    const c = await db();
+    try {
+      const pid = await newPlayer(c);
+      const g = await startGame(pid, "mobile", "killian");
+      expect(g.mode).toBe("killian");
+
+      // Guió determinista: 7 primers encerts ràpids, després tres trencades
+      // (errònia, timeout, errònia), i la resta encerts lents (90 seguits).
+      let expectedScore = 0;
+      let streak = 0;
+      let expectedFas = 0;
+      const { kilianHitPoints } = await import("../lib/game/kilian");
+
+      for (let p = 1; p <= 100; p++) {
+        const item = await c.query<{ is_word: boolean }>(
+          `SELECT is_word FROM game_items WHERE game_id = $1 AND position = $2`,
+          [g.gameId, p]
+        );
+        const isWord = item.rows[0].is_word;
+        await serveItem(pid, g.gameId, p);
+
+        const broken = p === 8 || p === 9 || p === 10;
+        const action = p === 9 ? "timeout" : broken ? "wrong" : "hit";
+        const choice =
+          action === "hit" ? (isWord ? "yes" : "no")
+          : action === "wrong" ? (isWord ? "no" : "yes") // error garantit
+          : undefined;
+        if (action === "wrong" && !isWord) expectedFas++;
+        // Ratxa esperada: encert la puja; qualsevol trencada la posa a zero.
+        const willBeCorrect = action === "hit";
+        const nextStreak = willBeCorrect ? streak + 1 : 0;
+
+        // Punts esperats segons ki-1 (repliquem la regla pura per contrast).
+        if (willBeCorrect) expectedScore += kilianHitPoints(900, nextStreak);
+
+        const res = await submitResponse(pid, {
+          responseId: crypto.randomUUID(),
+          gameId: g.gameId,
+          position: p,
+          confidence: action === "timeout" ? Number.NaN : choice === "yes" ? 0.95 : 0.05,
+          timeToFirstInputMs: null,
+          responseTimeMs: action === "timeout" ? null : 900,
+          nAdjustments: null,
+          kind: action === "timeout" ? "timeout" : "answer",
+          choice,
+          elapsedMs: action === "timeout" ? 5200 : 900,
+          inputMethod: "swipe",
+        }, "mobile");
+
+        expect(res.duplicate).toBe(false);
+        if (p < 100) {
+          expect(res.outcome).toBeDefined();
+          expect(res.outcome!.streakAfter).toBe(nextStreak);
+        }
+        streak = nextStreak;
+      }
+
+      // Resultat agregat
+      const gr = await c.query<{
+        mode: string; score: number; best_streak: number; max_multiplier: number;
+        n_timeouts: number; n_correct: number; n_false_alarms: number; theta: number | null;
+      }>(`SELECT mode, score, best_streak, max_multiplier, n_timeouts, n_correct, n_false_alarms, theta
+          FROM game_results WHERE game_id = $1`, [g.gameId]);
+      const r = gr.rows[0];
+      expect(r.mode).toBe("killian");
+      expect(Number(r.score)).toBe(expectedScore);
+      expect(r.best_streak).toBe(90); // 7 encerts, 3 trencades, 90 seguits
+      expect(Number(r.max_multiplier)).toBeCloseTo(2.6);
+      expect(r.n_timeouts).toBe(1);
+      expect(r.n_correct).toBe(97);
+      expect(r.n_false_alarms).toBe(expectedFas);
+      expect(r.theta).toBeNull(); // els modes no es barregen
+
+      // Registre per resposta: timeout sense confiança, punts emmagatzemats
+      const rows = await c.query<{ response_kind: string; confidence: number | null; points: number | null; streak_after: number }>(
+        `SELECT response_kind, confidence, points, streak_after FROM responses
+         WHERE game_id = $1 ORDER BY position_in_game`, [g.gameId]);
+      expect(rows.rows.length).toBe(100);
+      const timeoutRow = rows.rows.find((x) => x.response_kind === "timeout")!;
+      expect(timeoutRow.confidence).toBeNull();
+      expect(Number(timeoutRow.points)).toBe(0);
+      expect(timeoutRow.streak_after).toBe(0);
+      const fifth = rows.rows[4]; // cinquè encert seguit: 80 punts × 1,2 = 95
+      expect(fifth.streak_after).toBe(5);
+      expect(Number(fifth.points)).toBe(95);
+
+      // Separació de modes: cap standing de Pompeu només amb partides kilianes
+      const st = await c.query(`SELECT * FROM player_standings WHERE player_id = $1`, [pid]);
+      expect(st.rowCount).toBe(0);
+
+      // El mapa sí que compta: paraules reals vistes via respostes kilianes
+      const seenWords = await c.query<{ n: number }>(
+        `SELECT COUNT(DISTINCT responses.item_id)::int AS n FROM responses
+         JOIN game_items gi ON gi.game_id = responses.game_id AND gi.item_id = responses.item_id
+         WHERE responses.game_id = $1 AND responses.is_word`,
+        [g.gameId]
+      );
+      expect(seenWords.rows[0].n).toBeGreaterThan(50);
+
+      const { getMapaView } = await import("../lib/server/mapa");
+      const mapa = await getMapaView(pid);
+      expect(mapa.wordsSeen).toBe(Number(seenWords.rows[0].n));
+    } finally {
+      await c.end();
+    }
+  });
+
+  it("un reenviament kiliana és idempotent", async () => {
+    const { startGame, serveItem, submitResponse } = await import("../lib/server/game");
+    const c = await db();
+    try {
+      const pid = await newPlayer(c);
+      const g = await startGame(pid, "mobile", "killian");
+      await serveItem(pid, g.gameId, 1);
+      const body = {
+        responseId: crypto.randomUUID(),
+        gameId: g.gameId,
+        position: 1,
+        confidence: 0.95,
+        timeToFirstInputMs: null,
+        responseTimeMs: 700,
+        nAdjustments: null,
+        kind: "answer" as const,
+        choice: "yes" as const,
+        elapsedMs: 700,
+        inputMethod: "swipe" as const,
+      };
+      const first = await submitResponse(pid, body, "mobile");
+      const second = await submitResponse(pid, body, "mobile");
+      expect(first.duplicate).toBe(false);
+      expect(second.duplicate).toBe(true);
+      const n = await c.query(`SELECT COUNT(*)::int AS n FROM responses WHERE response_id = $1`, [body.responseId]);
+      expect(n.rows[0].n).toBe(1);
+    } finally {
+      await c.end();
+    }
+  });
+
+  it("una partida kiliana no mou les finestres generals d'un jugador de Pompeu", async () => {
+    const { startGame, serveItem, submitResponse } = await import("../lib/server/game");
+    const c = await db();
+    try {
+      const pid = await newPlayer(c);
+
+      // Una partida Pompeu completa → crea standing.
+      const gp = await startGame(pid, "desktop");
+      for (let p = 1; p <= 100; p++) {
+        const item = await c.query<{ is_word: boolean }>(
+          `SELECT is_word FROM game_items WHERE game_id = $1 AND position = $2`, [gp.gameId, p]
+        );
+        await serveItem(pid, gp.gameId, p);
+        await submitResponse(pid, {
+          responseId: crypto.randomUUID(), gameId: gp.gameId, position: p,
+          confidence: item.rows[0].is_word ? 0.9 : 0.1,
+          timeToFirstInputMs: 300, responseTimeMs: 1200, nAdjustments: 0,
+        }, "desktop");
+      }
+      let st = await c.query<{ mean_hits: number }>(`SELECT mean_hits FROM player_standings WHERE player_id = $1`, [pid]);
+      expect(st.rowCount).toBe(1);
+
+      // Una partida Kiliana completa més tard → el standing queda intacte.
+      const gk = await startGame(pid, "mobile", "killian");
+      for (let p = 1; p <= 100; p++) {
+        const item = await c.query<{ is_word: boolean }>(
+          `SELECT is_word FROM game_items WHERE game_id = $1 AND position = $2`, [gk.gameId, p]
+        );
+        await serveItem(pid, gk.gameId, p);
+        await submitResponse(pid, {
+          responseId: crypto.randomUUID(), gameId: gk.gameId, position: p,
+          confidence: item.rows[0].is_word ? 0.95 : 0.05,
+          timeToFirstInputMs: null, responseTimeMs: 800, nAdjustments: null,
+          kind: "answer", choice: item.rows[0].is_word ? "yes" : "no",
+          elapsedMs: 800, inputMethod: "button",
+        }, "mobile");
+      }
+      st = await c.query<{ mean_hits: number }>(`SELECT mean_hits FROM player_standings WHERE player_id = $1`, [pid]);
+      expect(st.rowCount).toBe(1); // mateixa fila, sense canvis
+
+      // I el rànquing kiliana el veu, mentre els boards de Pompeu el filtren per mode.
+      const { getKilianRankings, getRankings } = await import("../lib/server/views");
+      const kb = await getKilianRankings();
+      expect(kb.some((row) => row.score > 0)).toBe(true);
+      const pompeuBoards = await getRankings();
+      expect(Array.isArray(pompeuBoards.individualHits)).toBe(true);
+    } finally {
+      await c.end();
+    }
+  });
+});
+
+d("integració · mapa de zones", () => {
+  beforeAll(async () => {
+    if (!ingestReady) {
+      const { runMigrations } = await import("../scripts/migrate-lib");
+      await runMigrations();
+      const { runIngest } = await import("../scripts/ingest-item-bank");
+      await runIngest();
+      ingestReady = true;
+    }
+  });
+
+  async function newPlayer(c: Client): Promise<string> {
+    const r = await c.query<{ id: string }>(
+      `INSERT INTO players (id, email, nickname) VALUES (gen_random_uuid(), $1, $2) RETURNING id`,
+      [`test-${Date.now()}-${Math.random().toString(36).slice(2)}@example.cat`, `jugador-${Math.random().toString(36).slice(2, 8)}`]
+    );
+    return r.rows[0].id;
+  }
+
+  /** Fabrica `n` paraules reals «vistes» per al jugador (respostes sintètiques). */
+  async function seedWordsSeen(c: Client, pid: string, n: number): Promise<void> {
+    const { startGame } = await import("../lib/server/game");
+    const g = await startGame(pid, "mobile");
+    await c.query(
+      `INSERT INTO responses (response_id, game_id, player_id, item_id, position_in_game,
+          stratum_id, is_word, confidence, is_correct, fifty_fifty,
+          item_bank_version, reference_corpus_version, calibration_version, scoring_version,
+          response_format, n_previous_games)
+       SELECT gen_random_uuid(), $2, $1, i.item_id, row_number() OVER (ORDER BY i.item_id),
+          i.word_stratum_id, true, 0.9, true, false,
+          '2026.08', 'ref-1', 'cal-1', 'sc-1',
+          g.response_format, 0
+       FROM (
+         SELECT item_id, word_stratum_id FROM items
+         WHERE bank_version = '2026.08' AND active AND is_word
+         ORDER BY item_id LIMIT $3
+       ) i
+       CROSS JOIN (SELECT response_format FROM games WHERE id = $2) g`,
+      [pid, g.gameId, n]
+    );
+  }
+
+  it("sense fitxes no es pot reclamar; amb fitxes el flux sencer quadra", async () => {
+    const { getMapaView, claimRegion } = await import("../lib/server/mapa");
+    const c = await db();
+    try {
+      const pid = await newPlayer(c);
+
+      // 0 paraules: cap zona guanyada.
+      let view = await getMapaView(pid);
+      expect(view.earned).toBe(0);
+      expect(view.pending).toBe(0);
+      await expect(claimRegion(pid, "catalunya--alt-camp")).rejects.toMatchObject({ status: 409 });
+
+      // 500 paraules vistes (T[0] = 408): exactament 1 fitxa.
+      await seedWordsSeen(c, pid, 500);
+      view = await getMapaView(pid);
+      expect(view.wordsSeen).toBe(500);
+      expect(view.earned).toBe(1);
+      expect(view.pending).toBe(1);
+
+      // Regió desconeguda → 400 (mai un insert).
+      await expect(claimRegion(pid, "catalunya--no-existeix")).rejects.toMatchObject({ status: 400 });
+
+      // Reclamació correcta: la fitxa es gasta.
+      const r = await claimRegion(pid, "catalunya--alt-camp");
+      expect(r.claim.regionId).toBe("catalunya--alt-camp");
+      expect(r.pending).toBe(0);
+
+      // Duplicat i segona zona sense fitxa → 409.
+      await expect(claimRegion(pid, "catalunya--alt-camp")).rejects.toMatchObject({ status: 409 });
+      await expect(claimRegion(pid, "illes-balears--mallorca")).rejects.toMatchObject({ status: 409 });
+
+      view = await getMapaView(pid);
+      expect(view.claimedIds).toEqual(["catalunya--alt-camp"]);
+      expect(view.completed).toBe(false);
+    } finally {
+      await c.end();
+    }
+  });
+
+  it("dues reclamacions concurrents no gasten la mateixa fitxa", async () => {
+    const { claimRegion } = await import("../lib/server/mapa");
+    const c = await db();
+    try {
+      const pid = await newPlayer(c);
+      await seedWordsSeen(c, pid, 500); // 1 fitxa
+      const [a, b] = await Promise.allSettled([
+        claimRegion(pid, "illes-balears--mallorca"),
+        claimRegion(pid, "carxe--carxe"),
+      ]);
+      const fulfilled = [a, b].filter((x) => x.status === "fulfilled");
+      expect(fulfilled).toHaveLength(1);
+      const n = await c.query(`SELECT COUNT(*)::int AS n FROM player_regions WHERE player_id = $1`, [pid]);
+      expect(n.rows[0].n).toBe(1);
+    } finally {
+      await c.end();
+    }
+  });
+});

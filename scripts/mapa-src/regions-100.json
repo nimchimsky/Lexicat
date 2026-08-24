@@ -1,0 +1,916 @@
+{
+  "schema_version": 1,
+  "count": 100,
+  "counts_by_territory": {
+    "Catalunya": 43,
+    "Franja": 4,
+    "Catalunya Nord": 6,
+    "País Valencià": 34,
+    "Illes Balears": 4,
+    "Alguer": 1,
+    "Andorra": 7,
+    "Carxe": 1
+  },
+  "regions": [
+    {
+      "n": 1,
+      "id": "catalunya--alt-camp",
+      "name": "Alt Camp",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 2,
+      "id": "catalunya--alt-emporda",
+      "name": "Alt Empordà",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 3,
+      "id": "catalunya--alt-penedes",
+      "name": "Alt Penedès",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 4,
+      "id": "catalunya--alt-urgell",
+      "name": "Alt Urgell",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 5,
+      "id": "catalunya--alta-ribagorca",
+      "name": "Alta Ribagorça",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 6,
+      "id": "catalunya--anoia",
+      "name": "Anoia",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 7,
+      "id": "catalunya--bages",
+      "name": "Bages",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 8,
+      "id": "catalunya--baix-camp",
+      "name": "Baix Camp",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 9,
+      "id": "catalunya--baix-ebre",
+      "name": "Baix Ebre",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 10,
+      "id": "catalunya--baix-emporda",
+      "name": "Baix Empordà",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 11,
+      "id": "catalunya--baix-llobregat",
+      "name": "Baix Llobregat",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 12,
+      "id": "catalunya--baix-penedes",
+      "name": "Baix Penedès",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 13,
+      "id": "catalunya--barcelones",
+      "name": "Barcelonès",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 14,
+      "id": "catalunya--bergueda",
+      "name": "Berguedà",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 15,
+      "id": "catalunya--cerdanya",
+      "name": "Cerdanya",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 16,
+      "id": "catalunya--conca-de-barbera",
+      "name": "Conca de Barberà",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 17,
+      "id": "catalunya--garraf",
+      "name": "Garraf",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 18,
+      "id": "catalunya--garrigues",
+      "name": "Garrigues",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 19,
+      "id": "catalunya--garrotxa",
+      "name": "Garrotxa",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 20,
+      "id": "catalunya--girones",
+      "name": "Gironès",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 21,
+      "id": "catalunya--maresme",
+      "name": "Maresme",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 22,
+      "id": "catalunya--moianes",
+      "name": "Moianès",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 23,
+      "id": "catalunya--montsia",
+      "name": "Montsià",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 24,
+      "id": "catalunya--noguera",
+      "name": "Noguera",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 25,
+      "id": "catalunya--osona",
+      "name": "Osona",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 26,
+      "id": "catalunya--pallars-jussa",
+      "name": "Pallars Jussà",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 27,
+      "id": "catalunya--pallars-sobira",
+      "name": "Pallars Sobirà",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 28,
+      "id": "catalunya--pla-de-l-estany",
+      "name": "Pla de l'Estany",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 29,
+      "id": "catalunya--pla-d-urgell",
+      "name": "Pla d'Urgell",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 30,
+      "id": "catalunya--priorat",
+      "name": "Priorat",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 31,
+      "id": "catalunya--ribera-d-ebre",
+      "name": "Ribera d'Ebre",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 32,
+      "id": "catalunya--ripolles",
+      "name": "Ripollès",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 33,
+      "id": "catalunya--segarra",
+      "name": "Segarra",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 34,
+      "id": "catalunya--segria",
+      "name": "Segrià",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 35,
+      "id": "catalunya--selva",
+      "name": "Selva",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 36,
+      "id": "catalunya--solsones",
+      "name": "Solsonès",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 37,
+      "id": "catalunya--tarragones",
+      "name": "Tarragonès",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 38,
+      "id": "catalunya--terra-alta",
+      "name": "Terra Alta",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 39,
+      "id": "catalunya--urgell",
+      "name": "Urgell",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 40,
+      "id": "catalunya--aran",
+      "name": "Aran",
+      "territory": "Catalunya",
+      "kind": "entitat territorial singular",
+      "source_key": "base2020",
+      "note": "Geometria del mapa comarcal QGIS/OSM 2020; Aran es tracta com una unitat pròpia."
+    },
+    {
+      "n": 41,
+      "id": "catalunya--valles-occidental",
+      "name": "Vallès Occidental",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 42,
+      "id": "catalunya--valles-oriental",
+      "name": "Vallès Oriental",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 43,
+      "id": "catalunya--llucanes",
+      "name": "Lluçanès",
+      "territory": "Catalunya",
+      "kind": "comarca",
+      "source_key": "catalunya2025",
+      "note": "Geometria 2025 registrada vectorialment sobre el mapa mare; es dibuixa per damunt d’Osona/Bages, ja que el mapa mare és anterior a la creació de la comarca."
+    },
+    {
+      "n": 44,
+      "id": "franja--baixa-ribagorca",
+      "name": "Baixa Ribagorça",
+      "territory": "Franja",
+      "kind": "comarca tradicional",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 45,
+      "id": "franja--llitera",
+      "name": "Llitera",
+      "territory": "Franja",
+      "kind": "comarca tradicional",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 46,
+      "id": "franja--baix-cinca",
+      "name": "Baix Cinca",
+      "territory": "Franja",
+      "kind": "comarca tradicional",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 47,
+      "id": "franja--matarranya",
+      "name": "Matarranya",
+      "territory": "Franja",
+      "kind": "comarca tradicional",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 48,
+      "id": "catalunya-nord--alta-cerdanya",
+      "name": "Alta Cerdanya",
+      "territory": "Catalunya Nord",
+      "kind": "comarca tradicional",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 49,
+      "id": "catalunya-nord--capcir",
+      "name": "Capcir",
+      "territory": "Catalunya Nord",
+      "kind": "comarca tradicional",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 50,
+      "id": "catalunya-nord--conflent",
+      "name": "Conflent",
+      "territory": "Catalunya Nord",
+      "kind": "comarca tradicional",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 51,
+      "id": "catalunya-nord--rossello",
+      "name": "Rosselló",
+      "territory": "Catalunya Nord",
+      "kind": "comarca tradicional",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 52,
+      "id": "catalunya-nord--vallespir",
+      "name": "Vallespir",
+      "territory": "Catalunya Nord",
+      "kind": "comarca tradicional",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 53,
+      "id": "catalunya-nord--fenolleda",
+      "name": "Fenolleda",
+      "territory": "Catalunya Nord",
+      "kind": "comarca tradicional",
+      "source_key": "base2020",
+      "note": "Fenolleda s’inclou perquè forma part de la convenció territorial de 100 unitats adoptada per al joc; és tradicionalment occitanòfona."
+    },
+    {
+      "n": 54,
+      "id": "pais-valencia--alacanti",
+      "name": "Alacantí",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 55,
+      "id": "pais-valencia--alcalaten",
+      "name": "Alcalatén",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 56,
+      "id": "pais-valencia--alcoia",
+      "name": "Alcoià",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 57,
+      "id": "pais-valencia--alt-maestrat",
+      "name": "Alt Maestrat",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 58,
+      "id": "pais-valencia--alt-millars",
+      "name": "Alt Millars",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 59,
+      "id": "pais-valencia--alt-palancia",
+      "name": "Alt Palància",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 60,
+      "id": "pais-valencia--alt-vinalopo",
+      "name": "Alt Vinalopó",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 61,
+      "id": "pais-valencia--baix-maestrat",
+      "name": "Baix Maestrat",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 62,
+      "id": "pais-valencia--baix-segura",
+      "name": "Baix Segura",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 63,
+      "id": "pais-valencia--baix-vinalopo",
+      "name": "Baix Vinalopó",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 64,
+      "id": "pais-valencia--camp-de-morvedre",
+      "name": "Camp de Morvedre",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 65,
+      "id": "pais-valencia--camp-de-turia",
+      "name": "Camp de Túria",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 66,
+      "id": "pais-valencia--canal-de-navarres",
+      "name": "Canal de Navarrés",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 67,
+      "id": "pais-valencia--comtat",
+      "name": "Comtat",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 68,
+      "id": "pais-valencia--costera",
+      "name": "Costera",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 69,
+      "id": "pais-valencia--foia-de-bunyol",
+      "name": "Foia de Bunyol",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 70,
+      "id": "pais-valencia--horta-nord",
+      "name": "Horta Nord",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 71,
+      "id": "pais-valencia--horta-oest",
+      "name": "Horta Oest",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 72,
+      "id": "pais-valencia--horta-sud",
+      "name": "Horta Sud",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 73,
+      "id": "pais-valencia--marina-alta",
+      "name": "Marina Alta",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 74,
+      "id": "pais-valencia--marina-baixa",
+      "name": "Marina Baixa",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 75,
+      "id": "pais-valencia--plana-alta",
+      "name": "Plana Alta",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 76,
+      "id": "pais-valencia--plana-baixa",
+      "name": "Plana Baixa",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 77,
+      "id": "pais-valencia--plana-d-utiel-requena",
+      "name": "Plana d'Utiel-Requena",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 78,
+      "id": "pais-valencia--ports",
+      "name": "Ports",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 79,
+      "id": "pais-valencia--raco-d-ademus",
+      "name": "Racó d'Ademús",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": "La convenció de joc inclou les 34 comarques valencianes, també les de predomini lingüístic castellà."
+    },
+    {
+      "n": 80,
+      "id": "pais-valencia--ribera-alta",
+      "name": "Ribera Alta",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 81,
+      "id": "pais-valencia--ribera-baixa",
+      "name": "Ribera Baixa",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 82,
+      "id": "pais-valencia--safor",
+      "name": "Safor",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 83,
+      "id": "pais-valencia--serrans",
+      "name": "Serrans",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 84,
+      "id": "pais-valencia--valencia",
+      "name": "València",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 85,
+      "id": "pais-valencia--vall-d-albaida",
+      "name": "Vall d'Albaida",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 86,
+      "id": "pais-valencia--vall-de-cofrents-aiora",
+      "name": "Vall de Cofrents-Aiora",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 87,
+      "id": "pais-valencia--vinalopo-mitja",
+      "name": "Vinalopó Mitjà",
+      "territory": "País Valencià",
+      "kind": "comarca",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 88,
+      "id": "illes-balears--mallorca",
+      "name": "Mallorca",
+      "territory": "Illes Balears",
+      "kind": "illa / consell insular",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 89,
+      "id": "illes-balears--menorca",
+      "name": "Menorca",
+      "territory": "Illes Balears",
+      "kind": "illa / consell insular",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 90,
+      "id": "illes-balears--eivissa",
+      "name": "Eivissa",
+      "territory": "Illes Balears",
+      "kind": "illa / consell insular",
+      "source_key": "base2020",
+      "note": "Eivissa i Formentera provenen de dos polígons insulars reals que el mapa font etiquetava conjuntament com a Pitiüses."
+    },
+    {
+      "n": 91,
+      "id": "illes-balears--formentera",
+      "name": "Formentera",
+      "territory": "Illes Balears",
+      "kind": "illa / consell insular",
+      "source_key": "base2020",
+      "note": "Eivissa i Formentera provenen de dos polígons insulars reals que el mapa font etiquetava conjuntament com a Pitiüses."
+    },
+    {
+      "n": 92,
+      "id": "alguer--l-alguer",
+      "name": "l'Alguer",
+      "territory": "Alguer",
+      "kind": "municipi / enclavament lingüístic",
+      "source_key": "base2020",
+      "note": ""
+    },
+    {
+      "n": 93,
+      "id": "andorra--ordino",
+      "name": "Ordino",
+      "territory": "Andorra",
+      "kind": "parròquia",
+      "source_key": "andorra_parishes",
+      "note": "Frontera parroquial real; geometria registrada sobre la petjada d’Andorra del mapa mare."
+    },
+    {
+      "n": 94,
+      "id": "andorra--la-massana",
+      "name": "La Massana",
+      "territory": "Andorra",
+      "kind": "parròquia",
+      "source_key": "andorra_parishes",
+      "note": "Frontera parroquial real; geometria registrada sobre la petjada d’Andorra del mapa mare."
+    },
+    {
+      "n": 95,
+      "id": "andorra--canillo",
+      "name": "Canillo",
+      "territory": "Andorra",
+      "kind": "parròquia",
+      "source_key": "andorra_parishes",
+      "note": "Frontera parroquial real; geometria registrada sobre la petjada d’Andorra del mapa mare."
+    },
+    {
+      "n": 96,
+      "id": "andorra--encamp",
+      "name": "Encamp",
+      "territory": "Andorra",
+      "kind": "parròquia",
+      "source_key": "andorra_parishes",
+      "note": "Frontera parroquial real; geometria registrada sobre la petjada d’Andorra del mapa mare."
+    },
+    {
+      "n": 97,
+      "id": "andorra--sant-julia-de-loria",
+      "name": "Sant Julià de Lòria",
+      "territory": "Andorra",
+      "kind": "parròquia",
+      "source_key": "andorra_parishes",
+      "note": "Frontera parroquial real; geometria registrada sobre la petjada d’Andorra del mapa mare."
+    },
+    {
+      "n": 98,
+      "id": "andorra--andorra-la-vella",
+      "name": "Andorra la Vella",
+      "territory": "Andorra",
+      "kind": "parròquia",
+      "source_key": "andorra_parishes",
+      "note": "Frontera parroquial real; geometria registrada sobre la petjada d’Andorra del mapa mare."
+    },
+    {
+      "n": 99,
+      "id": "andorra--escaldes-engordany",
+      "name": "Escaldes-Engordany",
+      "territory": "Andorra",
+      "kind": "parròquia",
+      "source_key": "andorra_parishes",
+      "note": "Frontera parroquial real; geometria registrada sobre la petjada d’Andorra del mapa mare."
+    },
+    {
+      "n": 100,
+      "id": "carxe--carxe",
+      "name": "Carxe",
+      "territory": "Carxe",
+      "kind": "àrea lingüística",
+      "source_key": "carxe_exact",
+      "note": "Delimitació exacta segons la font cartogràfica del Carxe (Limorti; mapa QGIS/OSM), registrada al sistema de coordenades visual del mapa mare."
+    }
+  ]
+}

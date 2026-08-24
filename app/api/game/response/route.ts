@@ -15,6 +15,8 @@ export async function POST(req: Request) {
   }
   try {
     const body = await req.json();
+    // El mode el decideix la partida al servidor; Pompeu exigeix confiança i
+    // Kilian un judici binari amb temps.
     const result = await submitResponse(
       player.id,
       {
@@ -25,6 +27,14 @@ export async function POST(req: Request) {
         timeToFirstInputMs: body.timeToFirstInputMs == null ? null : Math.round(Number(body.timeToFirstInputMs)),
         responseTimeMs: body.responseTimeMs == null ? null : Math.round(Number(body.responseTimeMs)),
         nAdjustments: body.nAdjustments == null ? null : Math.round(Number(body.nAdjustments)),
+        // Camps del mode Kilian (el servidor ignora els que no toquen al seu mode)
+        kind: body.kind === "timeout" ? "timeout" : body.kind === "answer" ? "answer" : undefined,
+        choice: body.choice === "yes" ? "yes" : body.choice === "no" ? "no" : undefined,
+        elapsedMs: body.elapsedMs == null ? null : Number(body.elapsedMs),
+        inputMethod:
+          body.inputMethod === "swipe" || body.inputMethod === "button" || body.inputMethod === "key"
+            ? body.inputMethod
+            : null,
       },
       deviceClassFromUserAgent(req.headers.get("user-agent"))
     );

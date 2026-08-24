@@ -1,4 +1,4 @@
-# Mode Pompeu — Lèxic.cat
+# Lexicat
 
 Joc web de decisió lèxica en català: 100 estímuls (66 paraules reals + 34
 pseudoparaules, una per estrat de dificultat), sense feedback durant la partida.
@@ -13,12 +13,12 @@ tota la interfície.
 ## Arrencada local
 
 ```bash
-# 1) Postgres (docker compose inclòs; port 5433)
-docker compose up -d
+# 1) Postgres local sense Docker (binaris incrustats via npm; port 5433)
+npm run db
 
 # 2) Dependències + configuració
 npm install
-cp .env.example .env          # els valors per defecte ja encaixen amb el compose
+cp .env.example .env          # els valors per defecte ja encaixen amb `npm run db`
 
 # 3) Esquema + banc d'ítems (migracions versionades + ingesta reproduïble)
 npm run db:setup
@@ -26,6 +26,17 @@ npm run db:setup
 # 4) Servidor de desenvolupament
 npm run dev                   # http://localhost:3000
 ```
+
+El servidor de Postgres el gestiona `scripts/dev-db.mjs` (paquet
+`embedded-postgres`): baixa binaris oficials de PostgreSQL 17 per npm i els
+executa com a procés local, amb les dades a `.pgdata/`. Ordres:
+
+| ordre | què fa |
+|---|---|
+| `npm run db` | arrenca en segon pla i espera que escolti (idempotent) |
+| `npm run db:stop` | aturada neta |
+| `npm run db:status` | estat |
+| `npm run db:reset` | atura i **esborra** `.pgdata` |
 
 L'entrada té dos camins:
 
@@ -61,14 +72,19 @@ scripts/
   ingest-item-bank.ts    Ingesta reproduïble del CSV (exclusions per item_id,
                          estratificació 66/34, congelació ref-1, percentils pob-1)
   simulate.ts            Arnès de simulació psicometrica
+  build-compact-map.ts   Generador del SVG compacte (illes i enclavaments
+                         reubicats) des de scripts/mapa-src/
+  mapa-src/              Còpia versionada del paquet cartogràfic ../Mapa
 lib/
   config.ts              TOTES les constants versionades (ε, K, versions, refredament…)
   psychometrics/         MÒDUL PUR: IRT MAP 2PL, lexicó, SDT, puntuació, percentils
   game/                  Selecció estratificada amb refredament + càlcul de resultats
   server/                DB pool, auth (enllaç mágic), partida, vistes i rànquings
   bank/                  Lectura del CSV d'origen i de la distribució de θ
+  mapa/                  Catàleg de les 100 regions + llindars de zones (pur)
 app/                     UI (App Router) + API routes
-components/              Components client (joc, formularis)
+components/              Components client (joc, formularis, mapa)
+public/mapa/             SVGs del mapa (mestre geogràfic + compacte generat)
 tests/                   Unitaris (sense DB) + integració (criteris §14)
 ```
 
@@ -89,6 +105,26 @@ tests/                   Unitaris (sense DB) + integració (criteris §14)
 4. Pantalla `/resultats/[gameId]`: resum amb interval sempre visible,
    descobertes ordenades per seguretat de l'error (enllaç al DIEC), falses
    alarmes i resta plegada.
+
+### El mapa dels Països Catalans (metaprogrés de zones)
+
+Cada ~1% del banc de paraules reals vistes (≈408 paraules, 6-7 partides) guanya
+una fitxa per reclamar una de les 100 zones del mapa. El progrés es deriva de
+`responses` (`COUNT(DISTINCT item_id) WHERE is_word`), no es desa mai; només
+viuen a la DB les zones col·locades (`player_regions`, migració 0004). Els
+llindars exactes (`lib/mapa/thresholds.ts`) fan caure la zona 100 a l'última
+paraula del banc vigent. Reclamar és transaccional amb bloqueig de jugador:
+mai no es gasten dues fitxes de més.
+
+- **`/mapa`**: el teu mapa, progrés cap a la propera zona i selector
+  (toca + confirma). Commutador compacte/geogràfic.
+- **Resultats**: CTA quan tens fitxa pendent; portada: mini-mapa enllaçat.
+- **SVG**: `public/mapa/paisos-catalans-100.svg` (mestre geogràfic, del paquet
+  `../Mapa`) i `paisos-catalans-100.compact.svg` (generat amb
+  `npx tsx scripts/build-compact-map.ts`: continent aplegat, Illes en
+  quadre-inset, Alguer i Carxe en medallons). Mateix contracte DOM de 100
+  `<g class="lexic-region">` amb ids estables a les dues variants; l'estat es
+  pinta amb `data-state` i CSS, sense guardar cap SVG per jugador.
 
 ### Com afegir un model d'estimació nou
 

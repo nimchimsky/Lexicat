@@ -1,276 +1,2133 @@
+/* ============================================================
+   Mode Pompeu · sistema visual
+   ------------------------------------------------------------
+   Tema definitiu: E «alta tensió» (fixat a app/layout.tsx).
+   Negre càlid de tinta, groc volt com a única veu forta i la
+   senyera com a element gràfic (mai retallada dins del text:
+   les lletres han de ser llegibles abans que decoratives).
+   Els altres cinc temes es conserven com a prototips: es
+   commuten canviant data-theme a <html>.
+
+   Regles sagrades (mesures de RT):
+     · la caixa de l'estímul MAI es transforma
+     · la seva aparició MAI s'anima
+     · cap feedback de correcció durant la partida
+     · la interfície de resposta no es mou entre ítems
+   ============================================================ */
+
+/* ============================================================
+   1 · TOKENS
+   ============================================================ */
+
 :root {
+  /* Escala d'espai (base 4) */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 20px;
+  --s6: 24px;
+  --s7: 32px;
+  --s8: 40px;
+  --s9: 56px;
+  --s10: 72px;
+
+  /* Escala tipogràfica */
+  --fs-micro: 11px;
+  --fs-mini: 12px;
+  --fs-small: 13px;
+  --fs-base: 15px;
+  --fs-body: 16px;
+  --fs-lead: 18px;
+  --fs-h3: 20px;
+  --fs-h2: 25px;
+  --fs-h1: 34px;
+
+  --col: 620px;
+  --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+
+  /* La senyera sencera en un sol degradat: nou franges iguals en
+     percentatge, de manera que la bandera surt completa i correcta a
+     qualsevol mida — barra de progrés, filet, quadradet de la marca. */
+  --flag: linear-gradient(
+    180deg,
+    var(--senyera-groc, var(--accent)) 0 11.111%,
+    var(--senyera-roig, var(--bad)) 11.111% 22.222%,
+    var(--senyera-groc, var(--accent)) 22.222% 33.333%,
+    var(--senyera-roig, var(--bad)) 33.333% 44.444%,
+    var(--senyera-groc, var(--accent)) 44.444% 55.555%,
+    var(--senyera-roig, var(--bad)) 55.555% 66.666%,
+    var(--senyera-groc, var(--accent)) 66.666% 77.777%,
+    var(--senyera-roig, var(--bad)) 77.777% 88.888%,
+    var(--senyera-groc, var(--accent)) 88.888% 100%
+  );
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-2: 0 6px 18px rgba(0, 0, 0, 0.25);
+  --shadow-3: 0 18px 46px rgba(0, 0, 0, 0.32);
+}
+
+/* ---------- A · Diccionari ---------- */
+:root,
+[data-theme="diccionari"] {
+  --bg: #f4efe4;
+  --bg-deep: #ebe4d4;
+  --surface: #fbf8ef;
+  --surface2: #e0d7c1;
+  --surface3: #d3c8ad;
+  --line: #ded3ba;
+  --line-strong: #c3b596;
+  --text: #211d15;
+  --text2: #4a4335;
+  --muted: #6f6751;
+  --accent: #b3402a;
+  --accent-ink: #fbf8ef;
+  --accent2: #1f4d8f;
+  --good: #3e6b3a;
+  --bad: #8f2f1f;
+  --scale-no: #c22c12;
+  --scale-mid: #9c6f00;
+  --scale-yes: #0f7d33;
+  --radius: 4px;
+  --radius-lg: 6px;
+  --font-display: var(--font-serif), Georgia, "Times New Roman", serif;
+  --font-body: var(--font-serif), Georgia, "Times New Roman", serif;
+  --font-num: var(--font-serif), Georgia, serif;
+  --shadow-1: 0 1px 2px rgba(83, 66, 40, 0.14);
+  --shadow-2: 0 6px 18px rgba(83, 66, 40, 0.13);
+  --shadow-3: 0 18px 40px rgba(83, 66, 40, 0.16);
+}
+
+/* ---------- B · Arcade ---------- */
+[data-theme="arcade"] {
+  --bg: #050805;
+  --bg-deep: #020402;
+  --surface: #0a130b;
+  --surface2: #17291b;
+  --surface3: #1f3824;
+  --line: #17291b;
+  --line-strong: #2b4a32;
+  --text: #c9ffd6;
+  --text2: #96d8a9;
+  --muted: #63a377;
+  --accent: #39ff70;
+  --accent-ink: #041007;
+  --accent2: #59e6ff;
+  --good: #39ff70;
+  --bad: #ff5577;
+  --scale-no: #ff4d6f;
+  --scale-mid: #ffe75c;
+  --scale-yes: #39ff70;
+  --radius: 2px;
+  --radius-lg: 2px;
+  --font-display: var(--font-mono), Consolas, "Courier New", monospace;
+  --font-body: var(--font-mono), Consolas, "Courier New", monospace;
+  --font-num: var(--font-mono), Consolas, monospace;
+}
+
+/* ---------- C · Laboratori ---------- */
+[data-theme="laboratori"] {
+  --bg: #ffffff;
+  --bg-deep: #f2f2f5;
+  --surface: #ffffff;
+  --surface2: #e9e9ee;
+  --surface3: #dcdce3;
+  --line: #e2e2e8;
+  --line-strong: #c6c6cf;
+  --text: #101014;
+  --text2: #3a3a42;
+  --muted: #66666f;
+  --accent: #2952ff;
+  --accent-ink: #ffffff;
+  --accent2: #2952ff;
+  --good: #0a7d43;
+  --bad: #d92b2b;
+  --scale-no: #d91919;
+  --scale-mid: #c47700;
+  --scale-yes: #078a3c;
+  --radius: 0px;
+  --radius-lg: 0px;
+  --font-display: var(--font-sans), "Helvetica Neue", Arial, sans-serif;
+  --font-body: var(--font-sans), "Helvetica Neue", Arial, sans-serif;
+  --font-num: var(--font-sans), Arial, sans-serif;
+  --shadow-1: 0 1px 2px rgba(16, 16, 20, 0.08);
+  --shadow-2: 0 6px 18px rgba(16, 16, 20, 0.08);
+  --shadow-3: 0 18px 40px rgba(16, 16, 20, 0.1);
+}
+
+/* ---------- D · Nit Tokyo ---------- */
+[data-theme="tokyo"] {
   --bg: #14131a;
-  --surface: #1e1d26;
-  --surface2: #292833;
+  --bg-deep: #0d0c12;
+  --surface: #1c1b25;
+  --surface2: #2b2a37;
+  --surface3: #383646;
+  --line: #2b2a37;
+  --line-strong: #423f52;
   --text: #f0eff4;
+  --text2: #c9c7d4;
   --muted: #a3a1b0;
   --accent: #ffb454;
+  --accent-ink: #191720;
   --accent2: #7aa2f7;
   --good: #9ece6a;
   --bad: #f7768e;
+  --scale-no: #ff5d6e;
+  --scale-mid: #ffb454;
+  --scale-yes: #46e07f;
   --radius: 14px;
+  --radius-lg: 18px;
+  --font-display: var(--font-sans), "Segoe UI", Roboto, sans-serif;
+  --font-body: var(--font-sans), "Segoe UI", Roboto, sans-serif;
+  --font-num: var(--font-sans), "Segoe UI", sans-serif;
 }
 
-* { box-sizing: border-box; }
+/* ---------- E · Alta tensió (tema definitiu) ---------- */
+[data-theme="tensio"] {
+  --bg: #0a0907;
+  --bg-deep: #050403;
+  --surface: #15130e;
+  --surface2: #1e1b14;
+  --surface3: #2a251a;
+  --line: #262218;
+  --line-strong: #3d3524;
+  --text: #f7f3e7;
+  --text2: #cec7b2;
+  --muted: #968d76;
+  --accent: #ffd60a;
+  --accent-ink: #12100a;
+  --accent2: #ffe45c;
+  --good: #6fdc8c;
+  --bad: #ff5040;
+  --scale-no: #ef3226;
+  --scale-mid: #ffc400;
+  --scale-yes: #35d16b;
+  --radius: 0px;
+  --radius-lg: 0px;
+  --font-display: var(--font-anton), "Arial Narrow", Impact, sans-serif;
+  --font-body: var(--font-sans), "Helvetica Neue", Arial, sans-serif;
+  --font-num: var(--font-sans), "Helvetica Neue", Arial, sans-serif;
 
-html, body {
+  --senyera-groc: #ffd60a;
+  --senyera-roig: #e5231b;
+
+  --shadow-1: 0 1px 0 rgba(0, 0, 0, 0.55);
+  --shadow-2: 0 10px 26px rgba(0, 0, 0, 0.55);
+  --shadow-3: 0 26px 60px rgba(0, 0, 0, 0.6);
+}
+
+/* ---------- F · Llibre major ---------- */
+[data-theme="major"] {
+  --bg: #e9efe4;
+  --bg-deep: #dde6d7;
+  --surface: #f3f7ef;
+  --surface2: #cbd8c4;
+  --surface3: #b9cab1;
+  --line: #cbd8c4;
+  --line-strong: #a8bc9f;
+  --text: #1d2b22;
+  --text2: #3c4f43;
+  --muted: #5c6e60;
+  --accent: #a33b2e;
+  --accent-ink: #f3f7ef;
+  --accent2: #2e5e4e;
+  --good: #2e6e46;
+  --bad: #7e2a1c;
+  --scale-no: #b32712;
+  --scale-mid: #8a6605;
+  --scale-yes: #0d7038;
+  --radius: 2px;
+  --radius-lg: 2px;
+  --font-display: var(--font-serif), Georgia, serif;
+  --font-body: var(--font-sans), "Helvetica Neue", Arial, sans-serif;
+  --font-num: var(--font-mono), Consolas, monospace;
+  --shadow-1: 0 1px 2px rgba(29, 43, 34, 0.12);
+  --shadow-2: 0 6px 18px rgba(29, 43, 34, 0.1);
+  --shadow-3: 0 18px 40px rgba(29, 43, 34, 0.14);
+}
+
+/* ============================================================
+   2 · BASE
+   ============================================================ */
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+html,
+body {
   margin: 0;
   padding: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
-  line-height: 1.45;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
 }
 
-.shell {
-  max-width: 520px;
-  margin: 0 auto;
-  padding: 16px 16px calc(24px + env(safe-area-inset-bottom));
+body {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
 }
 
-.footer {
-  max-width: 520px;
-  margin: 0 auto;
-  padding: 12px 16px calc(20px + env(safe-area-inset-bottom));
-  color: var(--muted);
-  font-size: 13px;
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
-.footer a { color: var(--muted); }
 
-h1 { font-size: 26px; margin: 18px 0 8px; }
-h2 { font-size: 19px; margin: 22px 0 8px; }
-p  { margin: 8px 0; }
-a  { color: var(--accent2); }
+::selection { background: var(--accent); color: var(--accent-ink); }
 
-.muted { color: var(--muted); font-size: 14px; }
-.small { font-size: 12px; }
+img,
+svg { max-width: 100%; }
+
+/* ---------- Estructura ---------- */
+
+.shell {
+  width: 100%;
+  max-width: var(--col);
+  margin: 0 auto;
+  padding: var(--s5) var(--s5) var(--s9);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.shell > main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* La partida ocupa la finestra sencera i no es desplaça mai: cada ítem
+   ha de trobar la interfície exactament al mateix lloc. */
+.shell.play {
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  padding: var(--s4) var(--s5) var(--s4);
+}
+
+.footer {
+  width: 100%;
+  max-width: var(--col);
+  margin: 0 auto;
+  padding: var(--s5) var(--s5) calc(var(--s5) + env(safe-area-inset-bottom));
+  color: var(--muted);
+  font-size: var(--fs-small);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s4);
+  flex-wrap: wrap;
+  border-top: 1px solid var(--line);
+}
+.footer a { color: var(--muted); text-decoration: none; }
+.footer a:hover { color: var(--text); text-decoration: underline; }
+.footer nav { display: flex; gap: var(--s4); flex-wrap: wrap; }
+.footer-mark {
+  font-family: var(--font-display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-size: var(--fs-mini);
+  color: var(--muted);
+}
+
+/* ---------- Barra superior ---------- */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  width: 100%;
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  -webkit-backdrop-filter: saturate(1.5) blur(12px);
+  backdrop-filter: saturate(1.5) blur(12px);
+  border-bottom: 1px solid var(--line);
+}
+.topbar-in {
+  max-width: var(--col);
+  margin: 0 auto;
+  padding: var(--s3) var(--s5);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+.topbar-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  font-family: var(--font-display);
+  font-size: var(--fs-base);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.topbar-mark:hover { color: var(--accent); }
+.topbar-mark .senyera { width: 15px; height: 15px; flex: none; }
+.topbar-nav { display: flex; align-items: center; gap: var(--s1); }
+.topbar-nav a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: var(--fs-small);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--radius);
+  white-space: nowrap;
+}
+.topbar-nav a:hover { color: var(--text); background: var(--surface2); }
+.topbar-nav a[aria-current="page"] { color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
+
+/* La senyera com a element gràfic reutilitzable */
+.senyera {
+  display: block;
+  height: 14px;
+  background-image: var(--flag);
+}
+
+/* ---------- Tipografia ---------- */
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: 1.08;
+  margin: 0;
+  text-wrap: balance;
+}
+h1 {
+  font-size: var(--fs-h1);
+  margin: var(--s6) 0 var(--s3);
+  letter-spacing: -0.01em;
+}
+h2 { font-size: var(--fs-h2); margin: var(--s8) 0 var(--s3); }
+h3 { font-size: var(--fs-h3); margin: var(--s6) 0 var(--s2); }
+p { margin: var(--s2) 0; }
+a { color: var(--accent2); text-underline-offset: 3px; }
+
+.lead {
+  font-size: var(--fs-lead);
+  color: var(--text2);
+  line-height: 1.45;
+  margin: 0 0 var(--s5);
+  max-width: 46ch;
+  text-wrap: pretty;
+}
+.subtitle {
+  color: var(--text2);
+  font-size: var(--fs-base);
+  margin: 0 0 var(--s5);
+  max-width: 48ch;
+  text-wrap: pretty;
+}
+.muted { color: var(--muted); font-size: var(--fs-base); }
+.small { font-size: var(--fs-small); line-height: 1.5; }
+.micro { font-size: var(--fs-mini); }
+.num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+
+/* Etiqueta de secció */
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  font-family: var(--font-body);
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 var(--s2);
+}
+.eyebrow::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+/* ---------- Botons ---------- */
 
 .btn {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
   width: 100%;
   border: 0;
   border-radius: var(--radius);
   background: var(--accent);
-  color: #14131a;
-  font-size: 17px;
+  color: var(--accent-ink);
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
   font-weight: 700;
-  padding: 15px 18px;
-  margin: 10px 0;
+  padding: var(--s4) var(--s6);
   cursor: pointer;
   min-height: 52px;
+  text-align: center;
+  text-decoration: none;
+  line-height: 1.2;
 }
+@media (prefers-reduced-motion: no-preference) {
+  .btn {
+    transition: transform 110ms var(--ease), box-shadow 110ms var(--ease),
+      background-color 110ms var(--ease), color 110ms var(--ease), border-color 110ms var(--ease);
+  }
+}
+a.btn:hover { text-decoration: none; }
+.btn:not(:disabled):hover { filter: brightness(1.06); }
+.btn:not(:disabled):active { transform: translateY(1px); }
 .btn.secondary {
-  background: var(--surface2);
+  background: transparent;
+  border: 1px solid var(--line-strong);
   color: var(--text);
-  font-weight: 500;
+  font-weight: 600;
 }
+.btn.secondary:not(:disabled):hover { background: var(--surface2); filter: none; }
+.btn.ghost {
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+  min-height: 44px;
+}
+.btn.ghost:not(:disabled):hover { color: var(--text); background: var(--surface2); filter: none; }
 .btn.danger {
   background: transparent;
-  border: 1px solid var(--bad);
+  border: 1px solid color-mix(in srgb, var(--bad) 55%, transparent);
   color: var(--bad);
-  font-weight: 500;
+  font-weight: 600;
 }
-.btn:disabled { opacity: 0.5; cursor: default; }
+.btn.danger:not(:disabled):hover { background: color-mix(in srgb, var(--bad) 12%, transparent); filter: none; }
+.btn.small { min-height: 42px; padding: var(--s2) var(--s4); font-size: var(--fs-small); width: auto; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-input[type="email"], input[type="text"] {
+main > .btn { margin-top: var(--s3); }
+
+/* Mesura de lectura del text corregut */
+main > p { max-width: 64ch; }
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin-top: var(--s6);
+}
+.actions.row { flex-direction: row; flex-wrap: wrap; }
+.actions.row .btn { width: auto; flex: 1 1 auto; }
+
+/* ---------- Camps ---------- */
+
+input[type="email"],
+input[type="text"] {
   width: 100%;
-  padding: 14px;
+  padding: var(--s3) var(--s4);
   border-radius: var(--radius);
-  border: 1px solid var(--surface2);
+  border: 1px solid var(--line-strong);
   background: var(--surface);
   color: var(--text);
-  font-size: 16px;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  min-height: 52px;
 }
+input::placeholder { color: var(--muted); opacity: 0.7; }
+input[type="email"]:focus,
+input[type="text"]:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+form { display: flex; flex-direction: column; gap: var(--s3); }
+.field-error { color: var(--bad); font-size: var(--fs-small); margin: 0; }
+
+/* Separador «o» entre dues vies equivalents */
+.or {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  color: var(--muted);
+  font-size: var(--fs-mini);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin: var(--s5) 0;
+}
+.or::before,
+.or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+/* ---------- Text corregut ---------- */
+
+main ul:not([class]) {
+  margin: var(--s3) 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text2);
+}
+main ul:not([class]) li {
+  position: relative;
+  padding: var(--s2) 0 var(--s2) var(--s5);
+  font-size: var(--fs-base);
+  border-bottom: 1px solid var(--line);
+}
+main ul:not([class]) li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 1.05em;
+  width: 7px;
+  height: 2px;
+  background: var(--accent);
+}
+main ul:not([class]) b { color: var(--text); }
+
+/* Parell etiqueta/valor, per al compte */
+.deflist {
+  display: grid;
+  gap: 0;
+  margin: var(--s4) 0;
+  border-top: 1px solid var(--line);
+}
+.deflist > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s4);
+  padding: var(--s3) 0;
+  border-bottom: 1px solid var(--line);
+}
+.deflist dt {
+  color: var(--muted);
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin: 0;
+}
+.deflist dd {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+/* ---------- Superfícies ---------- */
 
 .card {
+  position: relative;
   background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--s5);
+  margin: var(--s4) 0;
+}
+.card > :first-child { margin-top: 0; }
+.card > :last-child { margin-bottom: 0; }
+
+.notice {
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line));
+  border-left: 3px solid var(--accent);
+  padding: var(--s3) var(--s4);
   border-radius: var(--radius);
-  padding: 16px;
-  margin: 10px 0;
+  font-size: var(--fs-base);
+  margin: var(--s4) 0;
+  color: var(--text2);
+}
+.notice b { color: var(--text); }
+.notice a { font-weight: 600; }
+.notice .btn { margin-top: var(--s3); }
+.notice > :first-child { margin-top: 0; }
+.notice > p:last-of-type { margin-bottom: 0; }
+
+details.fold {
+  margin: var(--s6) 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+details.fold summary {
+  cursor: pointer;
+  color: var(--text2);
+  padding: var(--s4) 0;
+  font-size: var(--fs-base);
+  list-style-position: inside;
+}
+details.fold summary:hover { color: var(--text); }
+details.fold[open] summary { border-bottom: 1px solid var(--line); }
+details.fold[open] > *:last-child { margin-bottom: var(--s5); }
+
+/* ---------- Càrrega ---------- */
+
+.loading {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  color: var(--muted);
+}
+.loading span {
+  width: 6px;
+  height: 6px;
+  background: var(--muted);
+  display: inline-block;
+  border-radius: 50%;
+}
+.loading span:first-of-type { margin-left: var(--s2); }
+@media (prefers-reduced-motion: no-preference) {
+  .loading span { animation: loadpulse 1s ease-in-out infinite; }
+  .loading span:nth-of-type(2) { animation-delay: 0.15s; }
+  .loading span:nth-of-type(3) { animation-delay: 0.3s; }
+}
+@keyframes loadpulse { 50% { opacity: 0.2; transform: translateY(-2px); } }
+
+/* ============================================================
+   3 · PANTALLA DE PARTIDA
+   ============================================================ */
+
+/* Tres franges fixes: capçalera, escenari, comandament. L'escenari
+   s'estira; les altres dues no es mouen mai de lloc. */
+.shell > main.game {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: var(--s3);
 }
 
-/* ---------------- Joc ---------------- */
+.game-head { display: flex; flex-direction: column; gap: var(--s2); }
 
-.progressbar {
-  height: 12px;
-  border-radius: 8px;
-  background: var(--surface2);
-  overflow: hidden;
-  margin: 10px 0 6px;
+/* Avantsala i estats d'error: la mateixa columna, centrada verticalment */
+.game-intro {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--s2);
+  padding-bottom: var(--s8);
 }
-.progressbar > div {
-  height: 100%;
-  border-radius: 8px;
-  background: linear-gradient(90deg, var(--accent), #ff8f6b);
-  box-shadow: 0 0 10px rgba(255, 180, 84, 0.45);
-  transition: width 160ms cubic-bezier(0.2, 0.7, 0.3, 1);
+.game-intro.center { align-items: center; justify-content: center; }
+.game-intro h1 { margin: 0 0 var(--s3); }
+.game-intro .btn { margin-top: var(--s6); }
+
+.rules {
+  list-style: none;
+  margin: var(--s2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.rules li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+  padding: var(--s3) 0;
+  border-top: 1px solid var(--line);
+  color: var(--text2);
+  font-size: var(--fs-base);
+}
+.rules li:last-child { border-bottom: 1px solid var(--line); }
+.rules b {
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  line-height: 1;
+  color: var(--accent);
+  min-width: 2.2ch;
+  font-variant-numeric: tabular-nums;
 }
 
 .counter {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  gap: var(--s3);
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--fs-small);
+  font-variant-numeric: tabular-nums;
+}
+.counter-pos {
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  letter-spacing: 0.04em;
+  color: var(--text);
+  line-height: 1;
+}
+.counter-pos em { font-style: normal; color: var(--muted); }
+.counter-task {
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: var(--radius);
+  padding: var(--s1) var(--s3);
+  white-space: nowrap;
 }
 
+/* Progrés: la senyera s'omple d'esquerra a dreta sobre el seu propi
+   rastre apagat, amb marques cada deu ítems per llegir la distància. */
+.ticks {
+  position: relative;
+  height: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+.ticks-flag {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background-image: var(--flag);
+}
+.ticks-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent 0 calc(10% - 1px),
+    color-mix(in srgb, var(--bg) 70%, transparent) calc(10% - 1px) 10%
+  );
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ticks-flag { transition: width 300ms var(--ease); }
+}
+
+/* L'escenari: una platina d'observació. El marc, la retícula i el
+   vinyetatge són SEMPRE idèntics — no depenen de l'ítem ni s'animen
+   mai — de manera que l'estímul sempre apareix sobre el mateix fons i
+   els temps de reacció continuen sent comparables. */
 .stimulus-wrap {
-  flex: 1;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 38dvh;
+  min-height: 0;
+  padding: var(--s5) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(60% 34% at 50% 50%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 70%),
+    linear-gradient(180deg, var(--surface), var(--bg));
+  overflow: hidden;
 }
 .stimulus {
-  font-size: clamp(30px, 9vw, 44px);
-  letter-spacing: 0.02em;
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-display);
+  font-size: clamp(42px, 13.5vw, 76px);
+  line-height: 1.05;
+  letter-spacing: 0.01em;
   text-align: center;
-  word-break: break-word;
-  hyphens: none;
+  white-space: nowrap;
   user-select: none;
   -webkit-user-select: none;
+  padding: var(--s4) var(--s5);
+  max-width: 100%;
 }
+/* Ela geminada: aire al voltant del punt volat perquè «l·l» no es llegeixi «H» */
+.stimulus .gemil { letter-spacing: 0.09em; }
 
-.answers {
-  display: grid;
-  gap: 10px;
-  margin-top: 12px;
-}
-.answers .btn { margin: 0; }
-
-.slider-row {
-  margin-top: 4px;
+/* Comandament: sempre ancorat a baix, sempre de la mateixa alçada. */
+.dock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
   padding-bottom: env(safe-area-inset-bottom);
 }
-.slider-value {
-  text-align: center;
-  font-size: 40px;
-  font-weight: 800;
-  line-height: 1.1;
-  letter-spacing: 0.01em;
-  margin-bottom: 10px;
-  font-variant-numeric: tabular-nums;
-}
 
-/* Slider gran: la pista és el propi input, farit per JS fins al polze. */
-.slider-row input[type="range"] {
+.answers { display: grid; gap: var(--s2); }
+.answers .btn { width: 100%; }
+
+/* ---------- Escala de seguretat (7 posicions) ---------- */
+
+.scale { display: flex; flex-direction: column; gap: var(--s2); }
+.scale-readout {
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  min-height: 26px;
+  color: var(--text);
+}
+.scale-readout.zone-no { color: var(--scale-no); }
+.scale-readout.zone-mid { color: var(--scale-mid); }
+.scale-readout.zone-yes { color: var(--scale-yes); }
+
+.scale-track { position: relative; }
+.scale-track input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
+  display: block;
   width: 100%;
-  height: 20px;
-  border-radius: 10px;
+  height: 34px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
   outline: none;
   touch-action: none;
   cursor: pointer;
-  margin: 14px 0 10px;
+  margin: 0;
+  background: linear-gradient(
+    90deg,
+    var(--scale-no) 0%,
+    var(--scale-mid) 50%,
+    var(--scale-yes) 100%
+  );
 }
-.slider-row input[type="range"]:disabled {
-  opacity: 0.55;
-  cursor: default;
+.scale-track input[type="range"]:disabled { opacity: 0.5; cursor: default; }
+
+/* Els sis talls que fan visibles les set posicions */
+.scale-divs {
+  position: absolute;
+  inset: 1px;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  pointer-events: none;
 }
-.slider-row input[type="range"]::-webkit-slider-thumb {
+.scale-divs span { border-right: 2px solid var(--bg); }
+.scale-divs span:last-child { border-right: 0; }
+
+.scale-track input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 42px;
   height: 42px;
-  border-radius: 50%;
-  background: #ffffff;
-  border: 4px solid var(--accent);
-  box-shadow:
-    0 3px 10px rgba(0, 0, 0, 0.5),
-    inset 0 -3px 0 rgba(0, 0, 0, 0.08);
+  border-radius: var(--radius);
+  background: var(--thumb-color, var(--text));
+  border: 3px solid var(--bg);
+  box-shadow: 0 0 0 1px var(--thumb-color, var(--text)), 0 6px 16px rgba(0, 0, 0, 0.5);
 }
-.slider-row input[type="range"]:active::-webkit-slider-thumb {
-  transform: scale(1.08);
+.scale-track input[type="range"]::-moz-range-thumb {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius);
+  background: var(--thumb-color, var(--text));
+  border: 3px solid var(--bg);
+  box-shadow: 0 0 0 1px var(--thumb-color, var(--text)), 0 6px 16px rgba(0, 0, 0, 0.5);
 }
-.slider-row input[type="range"]::-moz-range-thumb {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: #ffffff;
-  border: 4px solid var(--accent);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
-}
-.slider-row input[type="range"]::-moz-range-track {
-  background: transparent;
-}
+.scale-track input[type="range"]::-moz-range-track { background: transparent; }
 
-.slider-hints {
-  display: flex;
-  justify-content: space-between;
-  padding: 0 2px;
+/* Tres retolats: extrems i centre, cadascun a la seva columna. Mai es
+   trepitgen perquè cada un té el seu terç i s'hi ajusta. */
+.scale-hints {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: var(--s2);
+  align-items: start;
+  color: var(--muted);
+  font-size: var(--fs-mini);
+  line-height: 1.25;
 }
+.scale-hints span:first-child { text-align: left; }
+.scale-hints span:nth-child(2) { text-align: center; }
+.scale-hints span:last-child { text-align: right; }
 
-/* ---------------- Resultats ---------------- */
+/* ============================================================
+   4 · PORTADA
+   ============================================================ */
 
-.big-number {
-  font-size: 54px;
-  font-weight: 800;
-  line-height: 1.05;
+.home { position: relative; }
+.home > *:not(.mapa-bg) { position: relative; z-index: 1; }
+
+.hero { padding: var(--s6) 0 var(--s5); }
+.wordmark {
+  font-family: var(--font-display);
+  font-size: clamp(52px, 16.5vw, 96px);
+  line-height: 0.92;
+  letter-spacing: 0.002em;
+  margin: 0;
   color: var(--accent);
+}
+.wordmark-rule {
+  width: 132px;
+  max-width: 46%;
+  height: 16px;
+  margin: var(--s4) 0 var(--s5);
+}
+.hero .subtitle { margin-bottom: 0; }
+
+.home-stats {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  flex-wrap: wrap;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: var(--s3) var(--s4);
+  margin: var(--s5) 0;
+}
+.home-stats .big-number { font-size: 40px; }
+
+.mode-grid { display: grid; gap: var(--s4); margin-top: var(--s6); }
+.mode-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  padding: var(--s5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+.mode-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--accent);
+}
+.mode-card.soon::before { background: var(--line-strong); }
+.mode-num {
+  position: absolute;
+  top: var(--s4);
+  right: var(--s5);
+  font-family: var(--font-display);
+  font-size: var(--fs-small);
+  letter-spacing: 0.16em;
+  color: var(--muted);
+  opacity: 0.7;
+  user-select: none;
+}
+.mode-tag {
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  color: var(--muted);
+  margin: 0;
+}
+.mode-name {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: 1.05;
+  margin: 0;
+  color: var(--text);
+}
+.mode-desc {
+  font-size: var(--fs-base);
+  color: var(--text2);
+  margin: 0 0 var(--s4);
+  max-width: 40ch;
+}
+/* Les crides a l'acció s'alineen a baix encara que els textos difereixin */
+.mode-card .btn { margin-top: auto; }
+.badge-soon {
+  display: inline-block;
+  border: 1px solid var(--line-strong);
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: var(--radius);
+}
+
+/* El mapa viu darrere del contingut: decoratiu, ancorat al marge dret
+   i sagnant fora de la columna, per no restar contrast al text. */
+.mapa-bg {
+  position: absolute;
+  top: -60px;
+  right: -90px;
+  width: 420px;
+  height: 640px;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.mapa-bg .mapa-inject svg {
+  width: 420px;
+  max-width: none;
+  opacity: 0.4;
+  -webkit-mask-image: linear-gradient(200deg, #000 8%, transparent 62%);
+  mask-image: linear-gradient(200deg, #000 8%, transparent 62%);
+}
+
+/* ============================================================
+   5 · RESULTATS
+   ============================================================ */
+
+.result-hero {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  padding: var(--s5);
+  margin: var(--s4) 0;
+}
+.big-number {
+  display: block;
+  font-family: var(--font-display);
+  font-size: clamp(64px, 20vw, 96px);
+  font-weight: 700;
+  line-height: 0.95;
+  letter-spacing: -0.01em;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  margin: var(--s1) 0;
 }
 .interval {
   color: var(--muted);
-  font-size: 15px;
-  margin-top: 4px;
+  font-size: var(--fs-base);
+  font-variant-numeric: tabular-nums;
+}
+
+/* L'interval de confiança dibuixat: la franja senyera és el rang, el
+   pal blanc és l'estimació puntual. */
+.ic { margin: var(--s4) 0 var(--s3); }
+.ic-track {
+  position: relative;
+  height: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface2);
+  overflow: hidden;
+}
+.ic-range {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--lo, 0%);
+  width: var(--w, 0%);
+  background-image: var(--flag);
+}
+.ic-point {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  left: var(--pt, 0%);
+  width: 3px;
+  margin-left: -1.5px;
+  background: var(--text);
+  box-shadow: 0 0 0 1px var(--bg);
+}
+.ic-scale {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: var(--fs-mini);
+  margin-top: var(--s1);
+  font-variant-numeric: tabular-nums;
 }
 
 .statgrid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-  margin-top: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s3);
+  margin: var(--s4) 0;
 }
 .stat {
   background: var(--surface);
-  border-radius: var(--radius);
-  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--s4);
+  min-width: 0;
 }
-.stat b { display: block; font-size: 22px; }
-.stat span { color: var(--muted); font-size: 13px; }
+.stat b {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 30px;
+  line-height: 1.05;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.stat span {
+  display: block;
+  margin-top: var(--s1);
+  color: var(--muted);
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 1.3;
+}
 
-.wordlist { list-style: none; margin: 6px 0; padding: 0; }
+/* ---------- Llistes de paraules ---------- */
+
+.wordlist { list-style: none; margin: var(--s3) 0; padding: 0; }
 .wordlist li {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 8px;
-  padding: 9px 0;
-  border-bottom: 1px solid var(--surface2);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3) 0;
+  border-bottom: 1px solid var(--line);
 }
-.wordlist a {
-  font-size: 17px;
-  font-weight: 600;
+.wordlist li:last-child { border-bottom: 0; }
+.word {
+  font-size: var(--fs-lead);
+  font-weight: 650;
   text-decoration: none;
+  color: var(--text);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
-.wordlist a:hover { text-decoration: underline; }
-.conf { color: var(--muted); font-size: 13px; white-space: nowrap; }
-
-details.fold { margin-top: 10px; }
-details.fold summary {
-  cursor: pointer;
-  color: var(--accent2);
-  padding: 10px 0;
+a.word { color: var(--accent); }
+a.word:hover { text-decoration: underline; }
+a.word::after {
+  content: "↗";
+  font-size: 0.66em;
+  margin-left: 0.35em;
+  color: var(--muted);
+  vertical-align: super;
 }
+.conf {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--muted);
+  font-size: var(--fs-mini);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+/* Barra de la seguretat amb què s'ha respost: com més plena, més grossa
+   l'errada (o més ferma l'encert). */
+.conf-bar {
+  width: 46px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface2);
+  overflow: hidden;
+  flex: none;
+}
+.conf-bar i {
+  display: block;
+  height: 100%;
+  background: var(--conf-tone, var(--muted));
+}
+.conf .pts { color: var(--text2); }
 
-table.board { width: 100%; border-collapse: collapse; font-size: 15px; }
-table.board td, table.board th {
-  padding: 8px 6px;
-  border-bottom: 1px solid var(--surface2);
+/* ---------- Taules de rànquing ---------- */
+
+table.board {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-base);
+  margin: var(--s3) 0 var(--s6);
+}
+table.board th,
+table.board td {
+  padding: var(--s2) var(--s2);
+  border-bottom: 1px solid var(--line);
   text-align: left;
 }
-table.board td.num { text-align: right; font-variant-numeric: tabular-nums; }
-table.board th { color: var(--muted); font-weight: 500; font-size: 13px; }
+table.board th {
+  color: var(--muted);
+  font-weight: 700;
+  font-size: var(--fs-micro);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--line-strong);
+}
+table.board td.num,
+table.board th.num { text-align: right; font-variant-numeric: tabular-nums; }
+table.board td.rank {
+  width: 34px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-small);
+}
+table.board td.player { overflow-wrap: anywhere; }
+table.board td.value { font-weight: 700; color: var(--text); }
+table.board tbody tr:hover td { background: var(--surface); }
+/* Els tres primers porten el volt: número i xifra en groc, i el podi
+   marcat amb un filet a l'esquerra de la fila. */
+table.board tr.top td.rank {
+  color: var(--accent);
+  font-weight: 800;
+  font-size: var(--fs-base);
+  box-shadow: inset 3px 0 0 var(--accent);
+  padding-left: var(--s3);
+}
+table.board tr.top td.player { color: var(--text); font-weight: 650; }
+table.board tr.top td.value { color: var(--accent); }
 
-.notice {
-  background: rgba(255, 180, 84, 0.08);
+/* ============================================================
+   6 · MAPA
+   ============================================================
+   L'SVG s'injecta inline (una còpia per variant des de /public).
+   Porta un <style> propi amb colors per defecte; per guanyar-lo en
+   la cascada tots els selectors van amb .mapa-inject svg al davant. */
+
+.mapa-svg { position: relative; min-height: 60px; }
+.mapa-inject svg { display: block; width: 100%; height: auto; }
+.mapa-static { pointer-events: none; }
+
+/* El mapa dins d'un marc amb retícula: deixa de flotar en el buit */
+.mapa-stage {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(90% 60% at 50% 30%, color-mix(in srgb, var(--accent) 4%, transparent), transparent 70%),
+    var(--surface);
+  padding: var(--s4) var(--s3);
+  margin: var(--s4) 0;
+  overflow: hidden;
+}
+
+/* Estats de cada unitat (contracte: sempre el <g class="lexic-region">) */
+.mapa-inject svg .lexic-region {
+  fill: var(--surface3);
+  fill-opacity: 1;
+  stroke: var(--muted);
+  stroke-opacity: 0.85;
+}
+.mapa-inject svg .lexic-region:hover,
+.mapa-inject svg .lexic-region:focus {
+  fill: var(--surface3);
+  fill-opacity: 1;
+  stroke: var(--text);
+  outline: none;
+}
+.mapa-inject svg .lexic-region[data-state="claimed"] {
+  fill: var(--accent);
+  fill-opacity: 1;
+  stroke: var(--bg);
+}
+.mapa-inject svg .lexic-region[data-state="claimed"]:hover { stroke: var(--text); }
+.mapa-inject svg .lexic-region[data-state="available"] {
+  fill: var(--surface3);
+  fill-opacity: 1;
+  stroke: var(--accent);
+  cursor: pointer;
+}
+@media (prefers-reduced-motion: no-preference) {
+  /* Tres polsos i prou: crida l'atenció quan guanyes zones sense mantenir
+     un repintat infinit d'un plafó amb ~100 regions visibles. */
+  .mapa-inject svg .lexic-region[data-state="available"] {
+    animation: mapa-pulse 1.8s ease-in-out 3;
+  }
+}
+@keyframes mapa-pulse {
+  50% { fill: color-mix(in srgb, var(--accent) 42%, var(--surface3)); }
+}
+.mapa-inject svg .lexic-region[data-state="available"]:hover,
+.mapa-inject svg .lexic-region[data-state="available"]:focus {
+  fill: var(--accent);
+  animation: none;
+}
+.mapa-inject svg .lexic-region[data-state="selected"] {
+  fill: var(--accent);
+  fill-opacity: 1;
+  stroke: var(--text);
+}
+.mapa-inject svg .lexic-region[data-state="selected"] .region-shape { stroke-width: 6; }
+
+.mapa-inject svg .mapa-frame,
+.mapa-inject svg .mapa-medal { stroke: var(--line-strong); }
+.mapa-inject svg .mapa-label { fill: var(--muted); }
+
+/* Tooltip «Nom (Territori)» que segueix el cursor */
+.mapa-tip {
+  position: absolute;
+  z-index: 6;
+  transform: translate(-50%, calc(-100% - 12px));
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+  font-size: var(--fs-small);
+  font-weight: 600;
+  white-space: nowrap;
+  padding: var(--s1) var(--s3);
+  pointer-events: none;
+}
+
+/* Capçalera de /mapa */
+.mapa-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--s3);
+  flex-wrap: wrap;
+  margin: var(--s5) 0 var(--s3);
+}
+.mapa-counters { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mapa-zones {
+  font-size: var(--fs-base);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.mapa-zones b {
+  font-family: var(--font-display);
+  font-size: 32px;
+  line-height: 1;
+  color: var(--accent);
+  margin-right: 2px;
+}
+
+/* Commutador segmentat */
+.mapa-toggle {
+  display: inline-flex;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  overflow: hidden;
+  flex: none;
+}
+.mapa-toggle button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: var(--fs-small);
+  font-weight: 600;
+  padding: var(--s2) var(--s4);
+  min-height: 40px;
+  cursor: pointer;
+}
+.mapa-toggle button + button { border-left: 1px solid var(--line-strong); }
+.mapa-toggle button:hover { color: var(--text); background: var(--surface2); }
+.mapa-toggle button.on { background: var(--accent); color: var(--accent-ink); }
+
+.mapa-progress {
+  height: 10px;
+  background: var(--surface2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin: var(--s3) 0 var(--s1);
+}
+.mapa-progress i {
+  display: block;
+  height: 100%;
+  background-image: var(--flag);
+}
+.mapa-flash { color: var(--good); font-size: var(--fs-base); margin: var(--s2) 0; }
+.mapa-error { color: var(--bad); font-size: var(--fs-base); margin: var(--s2) 0; }
+
+/* Llegenda dels estats */
+.mapa-legend {
+  display: flex;
+  gap: var(--s4);
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: var(--fs-mini);
+  margin: var(--s3) 0 0;
+}
+.mapa-legend span { display: inline-flex; align-items: center; gap: var(--s2); }
+.mapa-legend i {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface3);
+}
+.mapa-legend .is-claimed { background: var(--accent); border-color: var(--accent); }
+.mapa-legend .is-free { border-color: var(--accent); }
+
+.mapa-info {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--s4);
+  margin: var(--s4) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-height: 78px;
+  justify-content: center;
+}
+.mapa-info b { font-size: var(--fs-lead); }
+.mapa-info .btn { margin-top: var(--s3); }
+.mapa-retry {
+  background: none;
+  border: none;
+  color: var(--accent2);
+  font-family: var(--font-body);
+  font-size: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+.mapa-how { margin-top: var(--s4); }
+
+/* ============================================================
+   7 · FLAIR PER TEMA
+   ============================================================ */
+
+/* ---------- A · Diccionari ---------- */
+[data-theme="diccionari"] body {
+  background:
+    radial-gradient(140% 100% at 50% 0%, rgba(255, 255, 255, 0.55), transparent 55%),
+    radial-gradient(160% 120% at 50% 110%, rgba(139, 116, 78, 0.16), transparent 60%),
+    var(--bg);
+}
+[data-theme="diccionari"] h1 { font-weight: 640; }
+[data-theme="diccionari"] .stimulus { font-weight: 500; }
+[data-theme="diccionari"] .btn.secondary { background: transparent; border: 1px solid var(--text); }
+[data-theme="diccionari"] .scale-readout { font-style: italic; }
+[data-theme="diccionari"] .notice { font-style: italic; }
+
+/* ---------- B · Arcade ---------- */
+[data-theme="arcade"] body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 60;
+  background:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.26) 0 2px, transparent 2px 4px),
+    radial-gradient(125% 95% at 50% 38%, transparent 62%, rgba(0, 0, 0, 0.55));
+}
+[data-theme="arcade"] h1,
+[data-theme="arcade"] .wordmark {
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-shadow: 0 0 14px rgba(57, 255, 112, 0.35);
+}
+[data-theme="arcade"] .stimulus {
+  color: var(--accent);
+  text-shadow: 0 0 16px rgba(57, 255, 112, 0.45);
+  letter-spacing: 0.05em;
+}
+[data-theme="arcade"] .btn {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: transparent;
+  border: 2px solid var(--accent);
+  color: var(--accent);
+}
+[data-theme="arcade"] .big-number { text-shadow: 0 0 18px rgba(57, 255, 112, 0.45); }
+
+/* ---------- C · Laboratori ---------- */
+[data-theme="laboratori"] h1 { font-weight: 800; letter-spacing: -0.02em; }
+[data-theme="laboratori"] .stimulus { font-weight: 300; letter-spacing: -0.015em; }
+[data-theme="laboratori"] .btn.secondary,
+[data-theme="laboratori"] .btn.danger { background: transparent; border: 1px solid var(--text); }
+[data-theme="laboratori"] .btn.danger { border-color: var(--bad); color: var(--bad); }
+[data-theme="laboratori"] .big-number { color: var(--text); letter-spacing: -0.02em; }
+
+/* ---------- D · Nit Tokyo ---------- */
+[data-theme="tokyo"] body {
+  background:
+    radial-gradient(90% 60% at 8% 0%, rgba(255, 180, 84, 0.09), transparent 60%),
+    radial-gradient(110% 80% at 95% 100%, rgba(122, 162, 247, 0.11), transparent 62%),
+    var(--bg);
+}
+[data-theme="tokyo"] .card,
+[data-theme="tokyo"] .stat,
+[data-theme="tokyo"] .mode-card { box-shadow: var(--shadow-2); }
+[data-theme="tokyo"] .btn {
+  background: linear-gradient(135deg, var(--accent), #ff8f6b);
+  box-shadow: 0 6px 18px rgba(255, 143, 107, 0.25);
+}
+[data-theme="tokyo"] .btn.secondary { background: var(--surface2); box-shadow: none; }
+
+/* ---------- F · Llibre major ---------- */
+[data-theme="major"] body {
+  background:
+    repeating-linear-gradient(0deg, transparent 0 27px, rgba(46, 94, 78, 0.13) 27px 28px),
+    var(--bg);
+}
+[data-theme="major"] h1 {
+  display: inline-block;
+  font-style: italic;
+  border-bottom: 3px double var(--accent);
+  padding-bottom: 6px;
+}
+[data-theme="major"] .counter,
+[data-theme="major"] .interval,
+[data-theme="major"] .conf,
+[data-theme="major"] .stat b,
+[data-theme="major"] .big-number { font-family: var(--font-num); }
+
+/* ============================================================
+   8 · E · ALTA TENSIÓ — el tema definitiu
+   ============================================================ */
+
+[data-theme="tensio"] body {
+  background:
+    radial-gradient(130% 60% at 50% -8%, rgba(255, 214, 10, 0.055), transparent 55%),
+    radial-gradient(150% 80% at 50% 112%, rgba(229, 35, 27, 0.05), transparent 60%),
+    var(--bg);
+}
+[data-theme="tensio"] ::selection { background: var(--senyera-roig); color: var(--senyera-groc); }
+
+[data-theme="tensio"] ::-webkit-scrollbar { width: 10px; }
+[data-theme="tensio"] ::-webkit-scrollbar-track { background: var(--bg); }
+[data-theme="tensio"] ::-webkit-scrollbar-thumb { background: var(--surface3); border: 2px solid var(--bg); }
+[data-theme="tensio"] ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+/* ---- Titulars de pòster ---- */
+[data-theme="tensio"] h1,
+[data-theme="tensio"] h2,
+[data-theme="tensio"] h3 {
+  text-transform: uppercase;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+[data-theme="tensio"] h1 {
+  font-size: clamp(32px, 9vw, 46px);
+  line-height: 0.98;
+}
+[data-theme="tensio"] h2 {
+  font-size: var(--fs-h3);
+  letter-spacing: 0.05em;
+  padding-left: var(--s3);
   border-left: 3px solid var(--accent);
-  padding: 10px 12px;
-  border-radius: 6px;
-  font-size: 14px;
-  margin: 10px 0;
+  line-height: 1.15;
+}
+[data-theme="tensio"] h3 { font-size: var(--fs-base); letter-spacing: 0.08em; }
+
+/* Anton només porta el pes 400: qualsevol «bold» el sintetitza el
+   navegador i el resultat és una lletra empastada. Es desactiva a tot
+   arreu on manem la font de titular. */
+[data-theme="tensio"] .wordmark,
+[data-theme="tensio"] .big-number,
+[data-theme="tensio"] .stat b,
+[data-theme="tensio"] .mode-name,
+[data-theme="tensio"] .mode-num,
+[data-theme="tensio"] .counter-pos,
+[data-theme="tensio"] .rules b,
+[data-theme="tensio"] .mapa-zones b,
+[data-theme="tensio"] .scale-readout,
+[data-theme="tensio"] .topbar-mark,
+[data-theme="tensio"] .footer-mark { font-weight: 400; }
+
+/* La marca: lletres plenes de groc volt amb el desplaçament vermell de
+   la impressió a dos colors. La senyera hi és, però com a element
+   gràfic — no retallada dins del text, que la feia il·legible. */
+[data-theme="tensio"] .wordmark {
+  color: var(--senyera-groc);
+  text-shadow:
+    3px 3px 0 var(--senyera-roig),
+    0 18px 44px rgba(255, 214, 10, 0.12);
+}
+[data-theme="tensio"] .hero { text-align: left; }
+
+/* ---- Botons: volt pla, premsa física ---- */
+[data-theme="tensio"] .btn {
+  font-family: var(--font-display);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: var(--fs-lead);
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.5);
+}
+[data-theme="tensio"] .btn:not(:disabled):hover {
+  filter: brightness(1.05);
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.5);
+}
+[data-theme="tensio"] .btn:not(:disabled):active {
+  filter: none;
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
+}
+[data-theme="tensio"] .btn:focus-visible { outline: 2px dashed var(--accent); outline-offset: 4px; }
+[data-theme="tensio"] .btn.secondary,
+[data-theme="tensio"] .btn.danger,
+[data-theme="tensio"] .btn.ghost { box-shadow: none; }
+[data-theme="tensio"] .btn.secondary:not(:disabled):hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.45);
+}
+[data-theme="tensio"] .btn.ghost:not(:disabled):hover { transform: none; box-shadow: none; }
+
+/* ---- Superfícies: un tall de senyera a la cantonada ---- */
+[data-theme="tensio"] .card,
+[data-theme="tensio"] .stat,
+[data-theme="tensio"] .mode-card,
+[data-theme="tensio"] .result-hero,
+[data-theme="tensio"] .mapa-info,
+[data-theme="tensio"] .mapa-stage {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 40%),
+    var(--surface);
+  box-shadow: var(--shadow-2);
+}
+[data-theme="tensio"] .card::after,
+[data-theme="tensio"] .result-hero::after,
+[data-theme="tensio"] .stat::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 26px;
+  height: 4px;
+  background: linear-gradient(90deg, var(--senyera-groc) 0 55%, var(--senyera-roig) 55%);
+}
+[data-theme="tensio"] .card,
+[data-theme="tensio"] .result-hero,
+[data-theme="tensio"] .stat { position: relative; }
+[data-theme="tensio"] .mode-card:not(.soon):hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-3);
+}
+[data-theme="tensio"] .mode-card.soon {
+  background:
+    repeating-linear-gradient(-45deg, transparent 0 10px, rgba(255, 255, 255, 0.018) 10px 11px),
+    var(--surface);
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-theme="tensio"] .mode-card { transition: border-color 140ms var(--ease), box-shadow 140ms var(--ease); }
+}
+
+/* ---- Partida ---- */
+[data-theme="tensio"] .counter { text-transform: uppercase; letter-spacing: 0.14em; }
+[data-theme="tensio"] .ticks { box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.5); }
+[data-theme="tensio"] .ticks-flag::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 2px;
+  background: var(--senyera-groc);
+  box-shadow: 0 0 10px rgba(255, 214, 10, 0.8);
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-theme="tensio"] .ticks-flag::after { animation: brasa 1.4s ease-in-out infinite; }
+}
+@keyframes brasa { 50% { opacity: 0.45; } }
+
+/* L'estímul com a espècimen: quatre cantonades cenyides a la paraula.
+   La caixa NO es transforma ni s'anima mai (mesures de RT). */
+[data-theme="tensio"] .stimulus::before,
+[data-theme="tensio"] .stimulus::after {
+  content: "";
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border: 0 solid var(--accent);
+  opacity: 0.85;
+}
+[data-theme="tensio"] .stimulus::before {
+  top: 0;
+  left: 0;
+  border-top-width: 2px;
+  border-left-width: 2px;
+}
+[data-theme="tensio"] .stimulus::after {
+  bottom: 0;
+  right: 0;
+  border-bottom-width: 2px;
+  border-right-width: 2px;
+}
+
+[data-theme="tensio"] .scale-track input[type="range"] {
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.55);
+}
+[data-theme="tensio"] .scale-hints { text-transform: uppercase; letter-spacing: 0.07em; }
+[data-theme="tensio"] .scale-readout { text-transform: uppercase; }
+
+/* ---- Resultats ---- */
+[data-theme="tensio"] .big-number {
+  color: var(--senyera-groc);
+  text-shadow: 3px 3px 0 var(--senyera-roig);
+}
+[data-theme="tensio"] .home-stats .big-number { text-shadow: 2px 2px 0 var(--senyera-roig); }
+[data-theme="tensio"] .wordlist li { transition: background-color 90ms var(--ease); }
+[data-theme="tensio"] .wordlist li:hover { background: rgba(255, 214, 10, 0.035); }
+[data-theme="tensio"] table.board tbody tr:nth-child(even):not(.top) td {
+  background: rgba(255, 255, 255, 0.014);
+}
+[data-theme="tensio"] details.fold summary {
+  list-style: none;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-size: var(--fs-small);
+  font-weight: 700;
+}
+[data-theme="tensio"] details.fold summary::-webkit-details-marker { display: none; }
+[data-theme="tensio"] details.fold summary::before { content: "+ "; color: var(--accent); }
+[data-theme="tensio"] details.fold[open] summary::before { content: "− "; }
+
+[data-theme="tensio"] input[type="email"],
+[data-theme="tensio"] input[type="text"] { border-radius: 0; }
+[data-theme="tensio"] .notice {
+  background:
+    repeating-linear-gradient(-45deg, transparent 0 9px, rgba(255, 214, 10, 0.028) 9px 10px),
+    var(--surface);
+}
+
+/* ---- Mapa ---- */
+[data-theme="tensio"] .mapa-inject svg .lexic-region[data-state="claimed"] {
+  fill: var(--senyera-groc);
+  stroke: var(--bg);
+}
+
+/* ============================================================
+   9 · PANTALLES GRANS
+   ============================================================ */
+
+@media (min-width: 700px) {
+  :root { --fs-h1: 44px; --fs-h2: 30px; }
+  .shell { padding: var(--s6) var(--s6) var(--s10); }
+  .statgrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .mode-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .actions { flex-direction: row; flex-wrap: wrap; }
+  .actions .btn { width: auto; flex: 1 1 220px; }
+  main > .btn { width: auto; min-width: 220px; }
+}
+
+/* ============================================================
+   10 · ESCRIPTORI
+   ============================================================
+   El projecte és mòbil primer, però a partir de 1024px la columna
+   de 620px deixa un desert als dos costats. Allà amplies el marc a
+   --col-wide i composes de veritat; la partida (.shell.play) es
+   queda en una columna estable i centrada: la mida i posició de la
+   caixa de l'estímul ha de ser constant dins del mateix dispositiu. */
+
+@media (min-width: 1024px) {
+  :root {
+    --col-wide: 1440px;
+    --fs-micro: 12px;
+    --fs-mini: 13px;
+    --fs-small: 14px;
+    --fs-base: 16px;
+    --fs-body: 17px;
+    --fs-lead: 20px;
+    --fs-h3: 23px;
+    --fs-h2: 36px;
+    --fs-h1: 58px;
+  }
+
+  .shell,
+  .topbar-in,
+  .footer { max-width: var(--col-wide); }
+  .shell { padding: clamp(48px, 5vw, 80px) clamp(32px, 4vw, 64px) 96px; }
+  .topbar-in { padding: 14px clamp(32px, 4vw, 64px); }
+  .footer { padding: 24px clamp(32px, 4vw, 64px) calc(24px + env(safe-area-inset-bottom)); }
+
+  /* La partida: columna pròpia, mai l'amplada editorial */
+  .shell.play { max-width: 800px; }
+
+  /* ---- Portada: cartell ---- */
+  .home .hero { max-width: 760px; padding: clamp(56px, 7vw, 96px) 0 48px; }
+  .wordmark { font-size: clamp(88px, 9vw, 150px); }
+  .wordmark-rule { width: 220px; height: 22px; margin-top: 24px; margin-bottom: 24px; }
+  .hero .subtitle { font-size: var(--fs-lead); max-width: 52ch; }
+  .mapa-bg {
+    top: -110px;
+    right: -140px;
+    width: 760px;
+    height: 1020px;
+  }
+  .mapa-bg .mapa-inject svg { width: 760px; }
+  .home-stats { padding: 20px 24px; }
+  .home-stats .big-number { font-size: 58px; }
+  .mode-grid { gap: 32px; margin-top: 48px; }
+  .mode-card { min-height: 300px; padding: clamp(28px, 2.6vw, 40px); gap: 10px; }
+  .mode-num { top: 28px; right: clamp(28px, 2.6vw, 40px); }
+  .mode-name { font-size: clamp(34px, 2.7vw, 42px); }
+  .mode-desc { max-width: 48ch; font-size: 17px; margin-bottom: 24px; }
+  .mode-card .btn { min-height: 60px; font-size: 17px; }
+  .actions { gap: 16px; margin-top: 32px; }
+  .actions .btn { min-height: 60px; font-size: 17px; }
+
+  /* Els formularis no s'estiren a tot l'ample editorial */
+  main form { max-width: 520px; }
+
+  /* ---- Rànquings: taulers dos a dos ---- */
+  .boards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s5) var(--s8);
+    align-items: start;
+    margin-top: var(--s6);
+  }
+  .board-block { min-width: 0; }
+  .board-block > h2 { margin-top: 0; }
+  .board-block table.board { margin-bottom: 0; }
+
+  /* ---- Mapa: l'escenari no necessita tot l'ample editorial ---- */
+  .mapa-stage { max-width: 1120px; }
+
+  /* ---- Resultats ---- */
+  .result-hero { padding: 32px; }
+}
+
+/* ============================================================
+   5 · MODE KILIAN
+   ============================================================ */
+
+/* ---------- Pestanyes de mode als rànquings ---------- */
+
+.mode-tabs {
+  display: flex;
+  gap: var(--s2);
+  margin: var(--s4) 0 var(--s3);
+}
+.mode-tabs a {
+  font-family: var(--font-display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: var(--fs-small);
+  text-decoration: none;
+  padding: var(--s2) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--muted);
+}
+.mode-tabs a.active {
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.center-text { text-align: center; }
+
+/* ---------- Capçalera de partida Kilian ---------- */
+
+.kil-game { position: relative; }
+
+.counter .kil-score {
+  font-family: var(--font-num);
+  font-size: var(--fs-h2);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.counter .kil-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  font-family: var(--font-num);
+  font-size: var(--fs-base);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.kil-streak[data-hot="true"] { color: var(--accent); }
+.kil-flame {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--line-strong);
+  transition: background 200ms var(--ease), box-shadow 200ms var(--ease);
+}
+.kil-streak[data-hot="true"] .kil-flame {
+  background: var(--accent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+.kil-mult {
+  font-style: normal;
+  font-weight: 700;
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: var(--radius);
+  padding: 0 var(--s1);
+}
+.kil-mute {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: var(--fs-mini);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: var(--s1);
+}
+
+/* ---------- Escenari amb gest ---------- */
+
+/* L'escenari és la zona de gest: arrossegar horitzontalment respon.
+   La targeta segueix el dit una mica (--drag-x) i el vora s'encén del
+   costat triat mentre arrossegues. */
+.kil-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.kil-stage-card {
+  width: min(100%, 640px);
+  height: 100%;
+  max-height: 100%;
+  transform: translateX(var(--drag-x, 0px));
+  transition: border-color 120ms var(--ease), box-shadow 120ms var(--ease);
+}
+.kil-stage.drag-yes .kil-stage-card {
+  border-color: var(--scale-yes);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--scale-yes) 35%, transparent);
+}
+.kil-stage.drag-no .kil-stage-card {
+  border-color: var(--scale-no);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--scale-no) 35%, transparent);
+}
+.kil-hint {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: var(--fs-mini);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.55;
+  pointer-events: none;
+}
+.kil-hint-no { left: var(--s2); }
+.kil-hint-yes { right: var(--s2); }
+
+/* ---------- Barra de temps: la puntuació que baixa ---------- */
+
+.kil-timer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 8px;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  overflow: hidden;
+}
+.kil-bar-fill {
+  height: 100%;
+  transform-origin: left center;
+  will-change: transform;
+  background-image: var(--flag);
+}
+.kil-bar-fill.urgent {
+  background-image: linear-gradient(90deg, var(--bad), var(--bad));
+  animation: kil-pulse 400ms infinite alternate;
+}
+@keyframes kil-pulse {
+  from { filter: brightness(1); }
+  to { filter: brightness(1.5); }
+}
+
+/* ---------- Comandament: feedback + botons sí/no ---------- */
+
+.kil-dock { gap: var(--s2); }
+
+.kil-feedback {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s3);
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  visibility: hidden;
+}
+.kil-feedback.show { visibility: visible; animation: kil-pop 260ms var(--ease); }
+.kil-feedback b { font-weight: 400; }
+.kil-feedback.ok b { color: var(--scale-yes); }
+.kil-feedback.ko b { color: var(--scale-no); }
+.kil-feedback.late b { color: var(--muted); }
+.kil-feedback i {
+  font-style: normal;
+  font-weight: 700;
+  color: var(--accent);
+}
+.kil-feedback u {
+  text-decoration: none;
+  font-size: var(--fs-small);
+  color: var(--text2);
+  letter-spacing: 0.04em;
+}
+@keyframes kil-pop {
+  from { transform: scale(0.72); opacity: 0; }
+  60% { transform: scale(1.07); opacity: 1; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.kil-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s2);
+}
+.kil-btn {
+  min-height: 76px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s3);
+  touch-action: manipulation;
+}
+.kil-btn.no span { color: var(--scale-no); }
+.kil-btn.yes span { color: var(--scale-yes); }
+@media (prefers-reduced-motion: no-preference) {
+  .kil-btn:not(:disabled):active { transform: translateY(2px) scale(0.985); }
+}
+.kil-btn.no:not(:disabled):active {
+  background: color-mix(in srgb, var(--scale-no) 18%, var(--surface));
+  border-color: var(--scale-no);
+}
+.kil-btn.yes:not(:disabled):active {
+  background: color-mix(in srgb, var(--scale-yes) 18%, var(--surface));
+  border-color: var(--scale-yes);
+}
+.kil-btn:disabled { opacity: 0.45; cursor: default; }
+
+/* ---------- Miniaprenentatge ---------- */
+
+.kil-practice-tip {
+  position: absolute;
+  top: calc(50% + clamp(52px, 16vw, 92px));
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  white-space: nowrap;
+  color: var(--accent);
+  font-size: var(--fs-small);
+  letter-spacing: 0.03em;
+}
+.kil-intro .actions { display: flex; gap: var(--s3); align-items: center; }
+
+/* ---------- Resultats: la partida en un cop d'ull ---------- */
+
+.kil-strip-caption { margin-top: var(--s4); }
+.kil-strip {
+  display: grid;
+  grid-template-columns: repeat(20, 1fr);
+  gap: 3px;
+  margin: var(--s3) 0 var(--s5);
+}
+.kil-strip i {
+  aspect-ratio: 1;
+  border-radius: 2px;
+  background: var(--line);
+}
+.kil-strip i.ok { background: var(--scale-yes); }
+.kil-strip i.ko { background: var(--scale-no); }
+.kil-strip i.late {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--line-strong) 0 3px,
+    transparent 3px 6px
+  );
+}
+.wordlist .pts {
+  font-family: var(--font-num);
+  color: var(--muted);
+  font-size: var(--fs-small);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 520px) {
+  .kil-strip { grid-template-columns: repeat(10, 1fr); }
+  .kil-hint { display: none; }
 }

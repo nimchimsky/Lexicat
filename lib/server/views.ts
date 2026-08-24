@@ -10,20 +10,34 @@ import { SCORE_K, SCORING_EPSILON } from "../config";
 export interface ResultItemRow {
   position: number;
   stimulus: string;
-  confidence: number;
+  /** NULL només als timeouts del mode Killian (no és cap judici de confiança). */
+  confidence: number | null;
   isWord: boolean;
   isCorrect: boolean;
   fiftyFifty: boolean;
   responseTimeMs: number | null;
   diecUrl: string;
-  /** Punts Pompeu d'aquest ítem (regla ε/K versionada). Mai negatius. */
+  /** Punts Pompeu (regla ε/K) o punts Kilian emmagatzemats, segons el mode. */
   points: number;
+  /** Només killian. */
+  kind?: "answer" | "timeout";
+  elapsedMs?: number | null;
+}
+
+export interface KilianGameSummary {
+  score: number;
+  bestStreak: number;
+  maxMultiplier: number;
+  nTimeouts: number;
+  medianElapsedMs: number | null;
+  fastest: { stimulus: string; elapsedMs: number } | null;
 }
 
 export interface GameResultsView {
   gameId: string;
   finishedAt: string | null;
   qualityFlag: string | null;
+  mode: "pompeu" | "killian";
   summary: {
     nCorrect: number;
     totalItems: number;
@@ -47,6 +61,8 @@ export interface GameResultsView {
   /** §7.4: la resta, sense ordre especial. */
   rest: ResultItemRow[];
   referenceCorpusVersion: string;
+  /** Només mode killian. */
+  kilian?: KilianGameSummary;
 }
 
 export function diecUrl(form: string): string {
@@ -56,9 +72,9 @@ export function diecUrl(form: string): string {
 export async function getGameResultsView(gameId: string, playerId: string): Promise<GameResultsView> {
   const gameRes = await query<{
     player_id: string; status: string; finished_at: Date | null; quality_flag: string | null;
-    reference_corpus_version: string;
+    reference_corpus_version: string; mode: "pompeu" | "killian";
   }>(
-    `SELECT player_id, status, finished_at, quality_flag, reference_corpus_version
+    `SELECT player_id, status, finished_at, quality_flag, reference_corpus_version, mode
      FROM games WHERE id = $1`,
     [gameId]
   );
@@ -67,6 +83,60 @@ export async function getGameResultsView(gameId: string, playerId: string): Prom
   if (g.player_id !== playerId) throw new HttpError(403, "Partida d'un altre jugador");
   if (g.status !== "completed") throw new HttpError(409, "La partida encara no s'ha acabat");
 
+  const rowsRes = await query<{
+    position: number; form: string; confidence: number | null; is_word: boolean;
+    is_correct: boolean; fifty_fifty: boolean; response_time_ms: number | null;
+    points: number | null; response_kind: string | null; elapsed_ms: number | null;
+    b: number;
+  }>(
+    `SELECT gi.position, i.form, resp.confidence, resp.is_word, resp.is_correct,
+            resp.fifty_fifty, resp.response_time_ms, resp.points, resp.response_kind,
+            resp.elapsed_ms, i.b
+     FROM responses resp
+     JOIN game_items gi ON gi.game_id = resp.game_id AND gi.item_id = resp.item_id
+     JOIN items i ON i.item_id = resp.item_id
+     WHERE resp.game_id = $1
+     ORDER BY gi.position`,
+    [gameId]
+  );
+
+  if (g.mode === "killian") return kilianResultsView(g, gameId, rowsRes.rows);
+  return pompeuResultsView(g, gameId, rowsRes.rows);
+}
+
+function baseRows(
+  rows: Array<{
+    position: number; form: string; confidence: number | null; is_word: boolean;
+    is_correct: boolean; fifty_fifty: boolean; response_time_ms: number | null;
+    points: number | null; response_kind: string | null; elapsed_ms: number | null;
+    b: number;
+  }>
+): ResultItemRow[] {
+  return rows.map((it) => ({
+    position: it.position,
+    stimulus: it.form,
+    confidence: it.confidence,
+    isWord: it.is_word,
+    isCorrect: it.is_correct,
+    fiftyFifty: it.fifty_fifty,
+    responseTimeMs: it.response_time_ms,
+    diecUrl: diecUrl(it.form),
+    points: it.points ?? 0,
+    kind: (it.response_kind as "answer" | "timeout" | null) ?? undefined,
+    elapsedMs: it.elapsed_ms,
+  }));
+}
+
+async function pompeuResultsView(
+  g: { finished_at: Date | null; quality_flag: string | null; reference_corpus_version: string },
+  gameId: string,
+  rawRows: Array<{
+    position: number; form: string; confidence: number | null; is_word: boolean;
+    is_correct: boolean; fifty_fifty: boolean; response_time_ms: number | null;
+    points: number | null; response_kind: string | null; elapsed_ms: number | null;
+    b: number;
+  }>
+): Promise<GameResultsView> {
   const resRes = await query<{
     theta: number; se_theta: number; pct_lexicon: number; pct_lo: number; pct_hi: number;
     percentile: number; d_prime: number; criterion: number; n_correct: number;
@@ -80,23 +150,10 @@ export async function getGameResultsView(gameId: string, playerId: string): Prom
   if (resRes.rowCount === 0) throw new HttpError(409, "Resultats no calculats");
   const r = resRes.rows[0];
 
-  const itemsRes = await query<{
-    position: number; form: string; confidence: number; is_word: boolean;
-    is_correct: boolean; fifty_fifty: boolean; response_time_ms: number | null;
-    item_id: number; b: number;
-  }>(
-    `SELECT gi.position, i.form, resp.confidence, resp.is_word, resp.is_correct,
-            resp.fifty_fifty, resp.response_time_ms, i.item_id, i.b
-     FROM responses resp
-     JOIN game_items gi ON gi.game_id = resp.game_id AND gi.item_id = resp.item_id
-     JOIN items i ON i.item_id = resp.item_id
-     WHERE resp.game_id = $1
-     ORDER BY gi.position`,
-    [gameId]
-  );
-
   const { range } = await loadBank();
-  const rows: ResultItemRow[] = itemsRes.rows.map((it) => ({
+  // Pompeu recalcula sempre els punts amb la regla ε/K (mai confia en la
+  // columna emmagatzemada, que és de Kilian); Kilian fa servir els seus.
+  const rows: ResultItemRow[] = rawRows.map((it) => ({
     position: it.position,
     stimulus: it.form,
     confidence: it.confidence,
@@ -106,7 +163,7 @@ export async function getGameResultsView(gameId: string, playerId: string): Prom
     responseTimeMs: it.response_time_ms,
     diecUrl: diecUrl(it.form),
     points: displayItemScore(
-      pAssignedToCorrect(it.confidence, it.is_word),
+      pAssignedToCorrect(it.confidence ?? 0.5, it.is_word),
       it.b,
       range.bMin,
       range.bMax,
@@ -118,7 +175,7 @@ export async function getGameResultsView(gameId: string, playerId: string): Prom
   // Descobertes: paraules reals dites "no", ordenades per confiança de l'error descendent.
   const discoveries = rows
     .filter((x) => x.isWord && !x.isCorrect)
-    .sort((a, b) => a.confidence - b.confidence || a.position - b.position);
+    .sort((a, b) => (a.confidence ?? 0.5) - (b.confidence ?? 0.5) || a.position - b.position);
   const falseAlarms = rows.filter((x) => !x.isWord && !x.isCorrect);
   const rest = rows.filter((x) => x.isCorrect);
 
@@ -126,6 +183,7 @@ export async function getGameResultsView(gameId: string, playerId: string): Prom
     gameId,
     finishedAt: g.finished_at ? new Date(g.finished_at).toISOString() : null,
     qualityFlag: g.quality_flag,
+    mode: "pompeu",
     summary: {
       nCorrect: r.n_correct,
       totalItems: r.n_responses,
@@ -149,6 +207,87 @@ export async function getGameResultsView(gameId: string, playerId: string): Prom
   };
 }
 
+async function kilianResultsView(
+  g: { finished_at: Date | null; quality_flag: string | null; reference_corpus_version: string },
+  gameId: string,
+  rawRows: Array<{
+    position: number; form: string; confidence: number | null; is_word: boolean;
+    is_correct: boolean; fifty_fifty: boolean; response_time_ms: number | null;
+    points: number | null; response_kind: string | null; elapsed_ms: number | null;
+    b: number;
+  }>
+): Promise<GameResultsView> {
+  const resRes = await query<{
+    n_responses: number; n_correct: number; n_false_alarms: number; score: number;
+    best_streak: number | null; max_multiplier: number | null; n_timeouts: number | null;
+  }>(
+    `SELECT n_responses, n_correct, n_false_alarms, score,
+            best_streak, max_multiplier::float AS max_multiplier, n_timeouts
+     FROM game_results WHERE game_id = $1`,
+    [gameId]
+  );
+  if (resRes.rowCount === 0) throw new HttpError(409, "Resultats no calculats");
+  const r = resRes.rows[0];
+
+  const rows = baseRows(rawRows);
+  const discoveries = rows
+    .filter((x) => x.isWord && !x.isCorrect && x.kind !== "timeout")
+    .sort((a, b) => (b.elapsedMs ?? 0) - (a.elapsedMs ?? 0) || a.position - b.position);
+  const falseAlarms = rows.filter((x) => !x.isWord && !x.isCorrect && x.kind !== "timeout");
+  const timeouts = rows.filter((x) => x.kind === "timeout");
+  const hits = rows.filter((x) => x.isCorrect);
+
+  const elapsedList = hits
+    .map((x) => x.elapsedMs ?? 0)
+    .filter((x) => x > 0)
+    .sort((a, b) => a - b);
+  const medianElapsed =
+    elapsedList.length > 0
+      ? elapsedList[Math.floor((elapsedList.length - 1) / 2)]
+      : null;
+  let fastest: KilianGameSummary["fastest"] = null;
+  for (const x of hits) {
+    if (x.elapsedMs != null && x.kind !== "timeout" && (!fastest || x.elapsedMs < fastest.elapsedMs)) {
+      fastest = { stimulus: x.stimulus, elapsedMs: x.elapsedMs };
+    }
+  }
+
+  return {
+    gameId,
+    finishedAt: g.finished_at ? new Date(g.finished_at).toISOString() : null,
+    qualityFlag: g.quality_flag,
+    mode: "killian",
+    summary: {
+      nCorrect: r.n_correct,
+      totalItems: r.n_responses,
+      pctLexicon: 0,
+      pctLo: 0,
+      pctHi: 0,
+      percentile: 0,
+      dPrime: 0,
+      criterion: 0,
+      dPrimeCeiling: 0,
+      nFalseAlarms: r.n_false_alarms,
+      nFiftyFifty: 0,
+      score: r.score,
+      theta: 0,
+      seTheta: 0,
+    },
+    discoveries,
+    falseAlarms,
+    rest: [...hits, ...timeouts].sort((a, b) => a.position - b.position),
+    referenceCorpusVersion: g.reference_corpus_version,
+    kilian: {
+      score: r.score,
+      bestStreak: r.best_streak ?? 0,
+      maxMultiplier: r.max_multiplier ?? 1,
+      nTimeouts: r.n_timeouts ?? 0,
+      medianElapsedMs: medianElapsed,
+      fastest,
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Rànquings
 // ---------------------------------------------------------------------------
@@ -159,11 +298,58 @@ export interface RankingRow {
   detail?: string;
 }
 
+/** Fragment compartit d'eligibilitat de taulers. ÚNICA font: si canvien les
+ *  regles de validesa (flags de qualitat, jugadors esborrats), canvien aquí
+ *  per a totes les taules. recomputeStandings (lib/server/game.ts) aplica el
+ *  mateix predicat sobre games — mantén-los alineats. */
+const ELIGIBLE_GAME_SQL = `g.status = 'completed' AND g.quality_flag IS NULL`;
+
 const BOARD_FILTER = `
   FROM games g
   JOIN players p ON p.id = g.player_id
   JOIN game_results gr ON gr.game_id = g.id
-  WHERE g.status = 'completed' AND g.quality_flag IS NULL AND p.deleted_at IS NULL`;
+  WHERE ${ELIGIBLE_GAME_SQL} AND p.deleted_at IS NULL
+    AND g.mode = 'pompeu'`;
+
+export interface KilianRankingRow {
+  nickname: string | null;
+  score: number;
+  bestStreak: number;
+  maxMultiplier: number;
+}
+
+/**
+ * Millor partida Kiliana per jugador, ordenada per punts (rànquings separats
+ * per mode). El DISTINCT ON viu en una subconsulta SENSE límit i el top-N se
+ * aplica després, ja ordenat per punts: limitar abans retallaria un subconjunt
+ * arbitrari de jugadors (ordenats per UUID) i podria ometre els líders reals.
+ */
+export async function getKilianRankings(): Promise<KilianRankingRow[]> {
+  const res = await query<{
+    nickname: string | null; score: number; best_streak: number | null; max_multiplier: number | null;
+  }>(
+    `SELECT nickname, score, best_streak, max_multiplier
+     FROM (
+       SELECT DISTINCT ON (g.player_id)
+              p.nickname, gr.score::int AS score,
+              gr.best_streak::int AS best_streak,
+              gr.max_multiplier::float AS max_multiplier
+       FROM games g
+       JOIN players p ON p.id = g.player_id
+       JOIN game_results gr ON gr.game_id = g.id
+       WHERE ${ELIGIBLE_GAME_SQL} AND p.deleted_at IS NULL AND g.mode = 'killian'
+       ORDER BY g.player_id, gr.score DESC, g.finished_at ASC
+     ) best
+     ORDER BY score DESC
+     LIMIT 50`,
+  );
+  return res.rows.map((r) => ({
+    nickname: r.nickname,
+    score: Number(r.score),
+    bestStreak: r.best_streak ?? 0,
+    maxMultiplier: r.max_multiplier ?? 1,
+  }));
+}
 
 export async function getRankings() {
   const [bestHits, bestLex, generalHits, generalLex] = await Promise.all([

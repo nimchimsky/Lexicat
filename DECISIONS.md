@@ -131,3 +131,99 @@ Resend via API HTTP (`RESEND_API_KEY`), sense dependències noves.
 Els punts Pompeu de cada resposta (mateixa regla ε/K/W versionada) es mostren a
 la pantalla de resultats, fila a fila, amb una línia que explica la regla.
 Dins la partida res canvia: cap marcador en moviment (§3).
+
+## 12. Sistema visual: la senyera surt del text (24/08/2026)
+
+El tema definitiu continua sent E «alta tensió» (negre càlid, groc volt,
+vermell de senyera, Anton als titulars). El que canvia és **com** hi és la
+senyera. Fins ara la marca `LÈXIC.CAT` i el percentatge gran del resultat
+duien les franges retallades DINS de les lletres (`background-clip: text`).
+Amb nou franges dins d'una caixa d'Anton les astes queden tallades i tant la
+marca com la xifra deixen de llegir-se: és decoració guanyant a la lectura,
+just al revés del que convé a la peça que ha d'identificar el joc i a la que
+n'és el resultat.
+
+**Ara:** lletres plenes de groc amb el desplaçament vermell de la impressió a
+dos colors (la parella cromàtica hi és, la lletra es llegeix), i la senyera com
+a **element gràfic** propi: `--flag`, un sol degradat de nou franges en
+percentatge que surt sencer i correcte a qualsevol mida. Es fa servir al filet
+sota la marca, al quadradet de la barra superior, a la barra de progrés de la
+partida, a la del mapa i —la que més hi guanya— a la **banda de l'IC95** dels
+resultats, on el rang de l'interval ÉS la senyera i l'estimació puntual hi cau
+com una agulla blanca.
+
+**Altres decisions del mateix pas, totes de forma i cap de mecànica:**
+
+- **Barra superior i peu permanents** (`components/Chrome.tsx`) amb els enllaços
+  que ja existien escampats. A `/joc` desapareixen tots dos.
+- **La partida és una pantalla, no un document**: `.shell.play` fa exactament
+  `100dvh` sense desplaçament, i el joc és una graella de tres franges fixes
+  —capçalera, platina, comandament—. Així la interfície de resposta cau
+  SEMPRE al mateix píxel entre ítems, que és el que demanen les mesures de RT.
+- **L'escala de seguretat es veu com el que és**: set posicions discretes
+  dibuixades amb sis talls sobre la pista del semàfor, i el polze pintat del
+  color de la zona (abans era un forat negre amb vora de color). Els tres
+  retolats van en graella de tres columnes i ja no es trepitgen.
+- **La platina de l'estímul** és un plafó amb vora i una lluïssor central
+  fixa. És idèntica a cada ítem i no s'anima MAI: l'estímul apareix sempre
+  sobre el mateix fons (§ regles sagrades).
+- **Anton només porta el pes 400.** Qualsevol `font-weight: 700` el sintetitza
+  el navegador i empasta la lletra; es desactiva a tot arreu on manem la font
+  de titular.
+
+## 13. Mode Kilian (24/08/2026)
+
+Mode arcade binari amb rellotge, decisions del Roger del mateix dia.
+
+- **Mateixa cria, mateix pool:** la selecció és exactament la de Pompeu
+  (66/34 estratificats, refredament compartit per jugador entre modes,
+  restricció de lema). Les respostes van a la MATEIXA taula `responses`
+  amb `mode='killian'`, i per això el mapa i el lèxic personal compten
+  igual juguis al mode que juguis. Els modes no es barregen mai en cap
+  estimació: sense θ ni d′ kilianes, i `recomputeStandings` filtra
+  explícitament `mode='pompeu'`.
+- **Barra = puntuació:** lineal de 100 a 0 en 5 s (`KILIAN_BAR_MS`),
+  arrodonida a múltiples de 5. Constant tota la partida (res d'escurçada).
+  El servidor retalla al seu rang; sota 200 ms no hi ha punts ni ratxa
+  (`rt_below_threshold`, ≥20% marca `suspect_fast` igual que a Pompeu).
+- **Multiplicador ki-1:** graons cada 5 encerts (×1,2 a 5 … ×1,8 a 20),
+  ×2 a 25, i a partir d'aquí +0,1 per cada 10 més: ×2,7 amb ratxa perfecta
+  de 100. Sostre ×3 documentat, inabastable en una partida. Una partida
+  perfecta instantània fa ~21.120 punts (sostre teòric). Un timeout trencarà
+  la ratxa sempre: si no, esperar al límit seria l'estratègia dominant.
+- **Cap asimetria de falses alarmes** (decisió Roger): FA i omissió valen
+  el mateix error. El banc 66/34 ja protegeix del conservadorisme extrem
+  (dir sempre «no» només cobra 34 de 100 ítems) i l'asimetria mouria el
+  criteri de tota la població trencant la comparabilitat amb el calibratge.
+- **Timeout:** no és un judici → `confidence` NULL (columna ara nullable),
+  `response_kind='timeout'`, zero punts, ratxa a zero, fora de H/FA.
+  Els judicis binaris entren al model graduat com a extrems (0,95/0,05):
+  és el lexical decision clàssic de l'estudi.
+- **Rànquings separats per mode:** pestanya Kilian amb la millor partida
+  per punts; les taules de Pompeu filtren `mode='pompeu'`.
+- **Miniaprenentatge només la primera partida de cada mode:** 3 exemples
+  declarats al client (mai ítems del banc), amb el gest de swipe.
+- **Feedback fora de l'escenari** (decisió Roger): el resultat cau a una
+  ranura fixa del comandament, mai sobre la paraula. Encert 420 ms,
+  error 700 ms (temps just per llegir què ha passat).
+- **Integritat:** el servidor recalcula encert, punts i ratxa a cada
+  resposta (el client només mostra); `elapsed_ms` el mesura el client i el
+  servidor el retalla. La latència de xarxa queda dins el marge de gràcia
+  (+300 ms); la detecció dura d'anomalies de ritme queda diferida fins tenir
+  població pròpia.
+
+### Esmenes de la revisió (24/08/2026, post-codi)
+
+- **Font única de ratxa:** `submitResponse` llegeix l'últim `streak_after`
+  persistit (mai un recompte sobre `is_correct`), així un encert <200 ms —que
+  es desa amb ratxa 0— no pot ressuscitar mai; scoring, represa i agregats
+  queden alineats per construcció.
+- **`elapsed_ms` sempre retallat:** fora de rang només si és negatiu o no
+  numèric; per damunt de barra+gràcia es retalla (un timeout automàtic amb la
+  pestanya amagada registra un timeout normal, mai un 400).
+- **Duplicats al client:** `duplicate:true` sincronitza amb `/api/game/state`,
+  avança d'ítem o tanca a resultats — mai un blocatge al retry.
+- **Rànquing Kilian:** el `DISTINCT ON` viu en una subconsulta sense límit i
+  el top-50 se aplica ja ordenat per punts.
+- **Índex 0006** (`responses(player_id,item_id) WHERE is_word`) per al
+  recompte de paraules vistes; pols del mapa acotat a 3 iteracions.

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { currentPlayer } from "@/lib/server/auth";
 import { getPlayerSummary } from "@/lib/server/views";
-import { SLIDER_STEPS } from "@/lib/config";
+import { getMapaView } from "@/lib/server/mapa";
+import MapaCatala from "@/components/MapaCatala";
 import GuestButton from "@/components/GuestButton";
 
 export const dynamic = "force-dynamic";
@@ -12,59 +13,96 @@ function fmt(x: number, digits = 1): string {
 
 export default async function Home() {
   const player = await currentPlayer();
-  if (!player) {
-    return (
-      <main>
-        <h1>Mode Pompeu</h1>
-        <p>
-          Cent estímuls. Cap feedback. Al final: la teva estimació de lèxic en
-          català, amb interval i percentil, i cada paraula que has descobert,
-          enllaçada al DIEC.
-        </p>
-        <p className="muted">
-          Un ítem per nivell de dificultat (66 paraules i 34 pseudoparaules),
-          sempre comparable entre jugadors. Uns 4 minuts.
-        </p>
-        <GuestButton label="Juga ara, sense res més" />
-        <Link href="/entrar" className="btn secondary" style={{ display: "block", textAlign: "center", textDecoration: "none" }}>
-          Entra amb correu (per acumular entre dispositius)
-        </Link>
-        <p className="small muted">
-          Pots jugar de convidat ja; si més tard entres amb correu, tot el que
-          hagis jugat es conserva. El format actiu és l&apos;slider
-          ({SLIDER_STEPS} passos).
-        </p>
-      </main>
-    );
-  }
+  const summary = player ? await getPlayerSummary(player.id) : null;
+  const mapa = player ? await getMapaView(player.id) : null;
 
-  const summary = await getPlayerSummary(player.id);
+  const mapaCta = mapa
+    ? mapa.completed
+      ? "El teu mapa · complet"
+      : `El teu mapa · ${mapa.claimedIds.length}/${mapa.zones} zones${mapa.pending > 0 ? ` · ${mapa.pending} per col·locar` : ""}`
+    : "El mapa del lèxic";
+
   return (
-    <main>
-      <h1>Hola, {player.nickname ?? player.email}</h1>
-      {summary.standing ? (
-        <div className="card">
-          <p className="muted">La teva estimació acumulada ({summary.standing.nGames} de 5 partides a la finestra):</p>
-          <div className="big-number">{fmt(summary.standing.pctLexicon)}%</div>
-          <div className="interval">
-            IC95: {fmt(summary.standing.pctLo)}% – {fmt(summary.standing.pctHi)}% · percentil {fmt(summary.standing.percentile, 0)}
-          </div>
+    <main className="home">
+      {/* El mapa viu darrere del contingut: decoratiu, sense res d'interacció */}
+      <div className="mapa-bg" aria-hidden="true">
+        <MapaCatala variant="compacte" claimedIds={mapa?.claimedIds ?? []} interactive={false} />
+      </div>
+
+      <header className="hero">
+        <h1 className="wordmark">LEXICAT</h1>
+        <span className="senyera wordmark-rule" aria-hidden="true" />
+        <p className="subtitle">
+          Quantes paraules coneixes? Millora l&apos;estimació amb cada partida.
+        </p>
+      </header>
+
+      {player && summary?.standing ? (
+        <div className="home-stats">
+          <span className="big-number">{fmt(summary.standing.pctLexicon)}%</span>
+          <span className="muted small">
+            del lèxic català
+            <br />
+            IC95 {fmt(summary.standing.pctLo)}%–{fmt(summary.standing.pctHi)}% ·{" "}
+            {summary.standing.nGames}/5 partides
+          </span>
         </div>
-      ) : (
-        <p className="muted">Encara no tens cap partida acabada.</p>
-      )}
-      <p className="muted">
-        Partides acabades: {summary.gamesCompleted} · començades: {summary.gamesStarted}
-      </p>
-      <Link href="/joc" className="btn" style={{ textAlign: "center", textDecoration: "none" }}>
-        Juga
-      </Link>
-      <Link href="/ranquings" className="btn secondary" style={{ textAlign: "center", textDecoration: "none" }}>
-        Rànquings
-      </Link>
-      <Link href="/compte" className="btn secondary" style={{ textAlign: "center", textDecoration: "none" }}>
-        El meu compte
-      </Link>
+      ) : null}
+
+      <div className="mode-grid">
+        <section className="mode-card">
+          <span className="mode-num" aria-hidden="true">
+            01
+          </span>
+          <p className="mode-tag">Mode</p>
+          <p className="mode-name">Pompeu</p>
+          <p className="mode-desc">
+            Cent estímuls, set graus de seguretat. Demostra el teu vocabulari al
+            teu ritme.
+          </p>
+          {player ? (
+            <Link href="/joc" className="btn">
+              Juga
+            </Link>
+          ) : (
+            <GuestButton primary label="Juga ara" />
+          )}
+        </section>
+
+        <section className="mode-card">
+          <span className="mode-num" aria-hidden="true">
+            02
+          </span>
+          <p className="mode-tag">Mode</p>
+          <p className="mode-name">Kilian</p>
+          <p className="mode-desc">
+            Cinc segons per paraula. Ratxes, multiplicadors i punts: el mateix
+            lèxic, a tota velocitat.
+          </p>
+          {player ? (
+            <Link href="/killian" className="btn secondary">
+              Juga
+            </Link>
+          ) : (
+            <GuestButton primary={false} label="Juga ara" href="/killian" />
+          )}
+        </section>
+      </div>
+
+      <div className="actions">
+        <Link href="/mapa" className="btn secondary">
+          {mapaCta}
+        </Link>
+        {!player ? (
+          <Link href="/entrar" className="btn secondary">
+            Entra amb correu
+          </Link>
+        ) : (
+          <Link href="/ranquings" className="btn secondary">
+            Rànquings
+          </Link>
+        )}
+      </div>
     </main>
   );
 }

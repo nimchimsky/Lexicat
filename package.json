@@ -1,9 +1,14 @@
 {
-  "name": "mode-pompeu",
+  "name": "lexicat",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "open": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/open-dev.ps1",
+    "db": "node scripts/dev-db.mjs start",
+    "db:stop": "node scripts/dev-db.mjs stop",
+    "db:status": "node scripts/dev-db.mjs status",
+    "db:reset": "node scripts/dev-db.mjs reset",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
@@ -11,7 +16,7 @@
     "db:ingest": "tsx scripts/ingest-item-bank.ts",
     "db:setup": "tsx scripts/migrate.ts && tsx scripts/ingest-item-bank.ts",
     "simulate": "tsx scripts/simulate.ts",
-    "test": "vitest run tests/psychometrics.test.ts",
+    "test": "vitest run tests/psychometrics.test.ts tests/mapa.test.ts tests/killian.test.ts",
     "test:integration": "vitest run tests/integration.acceptance.test.ts"
   },
   "dependencies": {
@@ -26,6 +31,7 @@
     "@types/pg": "^8.15.4",
     "@types/react": "^19.1.9",
     "@types/react-dom": "^19.1.7",
+    "embedded-postgres": "^17.10.0-beta.17",
     "tsx": "^4.20.3",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"

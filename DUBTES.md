@@ -5,6 +5,36 @@ surt com a **RESOLT**, amb l'acció feta al costat.
 
 ---
 
+## RESOLT · 9. El mapa dels Països Catalans com a metaprogrés (23/08/2026)
+
+**Proposta del Roger:** amb el paquet cartogràfic de `../Mapa` (100 unitats,
+just les que calen), a mesura que respones paraules guanyes zones que tries
+lliurement, fins tenir tots els Països Catalans pintats. També integrar-ho a
+la portada i fer una variant amb les illes i enclavaments reubicats.
+
+**Decisions del Roger (23/08/2026):**
+
+1. **Compta:** paraules reals úniques VISTES (encertades o no). Les
+   pseudoparaules no compten. Amb el banc net (40.773 paraules reals: el CSV
+   en té 40.777 i la ingesta en exclou 4 sense DIEC) surt 1 zona per cada
+   ~408 paraules ≈ 6-7 partides, i la zona 100 cau exactament a l'última
+   paraula del banc.
+2. **Preu:** pla. Totes les zones valen una fitxa; l'estratègia (illa gran vs
+   moltes de petites) en surt sola.
+3. **On es reclama:** CTA a la pantalla de resultats quan hi ha fitxa pendent,
+   i sempre a `/mapa` (selector en dos passos: tocar + confirmar).
+4. **Portada:** variant COMPACTE (illes en quadre-inset, Alguer i Carxe en
+   medallons), generada per `scripts/build-compact-map.ts`; el mapa
+   geogràfic mestre queda a `/mapa` amb commutador.
+
+**Fet:** migració 0004 (`player_regions`), `lib/mapa/` (llindars + catàleg),
+`lib/server/mapa.ts` (vista derivada de `responses` + reclam transaccional
+amb bloqueig de jugador), `GET /api/mapa`, `POST /api/mapa/claim`,
+components `MapaCatala`/`MapaClient`, pàgina `/mapa`, bloc de mapa a
+resultats i portada, tests unitaris d'llindars i d'integració (flux sencer +
+concurrença). El progrés no es desa mai: es deriva de `responses`; només es
+desen les zones ja col·locades.
+
 ## RESOLT · 1. Lemes i formes (era: «ref-2 només lemes?»)
 
 **Decisió del Roger:** `cantar` i `cantaves` NO han de sortir mai a la mateixa
@@ -103,6 +133,13 @@ GitHub + Vercel + Neon; **convidats han de poder jugar**.
   apareix per consola/pantalla.
 
 ### Notes de deploy (Vercel + Neon)
+
+0. **L'ordre és obligatori: migracions ABANS del codi nou.** El codi que sap
+   de `games.mode` (0005) o `player_regions` (0004) falla amb 500 a tots els
+   endpoints de joc (i a la portada loguejada) si la migració encara no hi és.
+   L'ordre invers és segur: el codi vell omiteix les columnes noves i els
+   defaults cobreixen. A Vercel: executa `npm run db:migrate` apuntant a Neon
+   abans de promocionar el desplegament.
 
 1. Neon: crear projecte → copiar la cadena `DATABASE_URL` (pooler).
 2. Vercel: importar repo GitHub; env vars `DATABASE_URL`, `AUTH_SECRET`,

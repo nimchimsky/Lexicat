@@ -15,8 +15,9 @@ export default async function Entrar({
   const { error } = await searchParams;
   return (
     <main>
+      <p className="eyebrow">Compte</p>
       <h1>Entra</h1>
-      <p className="muted">
+      <p className="lead">
         Només el correu. T&apos;hi enviem un enllaç màgic: sense contrasenya.
         Serveix per acumular resultats entre dispositius; per jugar ara mateix
         no cal res.
@@ -29,7 +30,7 @@ export default async function Entrar({
         </div>
       ) : null}
       <EmailForm />
-      <p className="muted" style={{ textAlign: "center" }}>— o —</p>
+      <p className="or">o</p>
       <GuestButton />
     </main>
   );
