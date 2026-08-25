@@ -78,11 +78,12 @@ export default function MapaCatala({
           .replace(/id="map-title"/g, `id="${uid}-title"`)
           .replace(/id="map-desc"/g, `id="${uid}-desc"`)
           .replace(/aria-labelledby="map-title map-desc"/g, `aria-labelledby="${uid}-title ${uid}-desc"`);
-        if (!interactive) {
-          for (const g of boxRef.current.querySelectorAll("g.lexic-region")) {
-            g.removeAttribute("tabindex");
-            g.removeAttribute("role");
-          }
+        // Cap regió al cicle de tabulació: ~100 aturades no accionables
+        // bloquejarien el teclat. La selecció accessible és el desplegable
+        // textual de MapaClient; el mapa resta apuntable amb ratolí.
+        for (const g of boxRef.current.querySelectorAll("g.lexic-region")) {
+          g.removeAttribute("tabindex");
+          g.removeAttribute("role");
         }
         setStatus("ready");
       })
@@ -161,6 +162,7 @@ export default function MapaCatala({
     <div
       ref={wrapRef}
       className={`mapa-svg${interactive ? "" : " mapa-static"}`}
+      data-variant={variant}
       aria-hidden={interactive ? undefined : "true"}
     >
       {status === "loading" ? (

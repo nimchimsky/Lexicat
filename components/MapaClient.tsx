@@ -7,7 +7,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import MapaCatala, { type MapaVariant } from "./MapaCatala";
-import { REGIONS, regionInfo } from "@/lib/mapa/catalog";
+import { REGIONS, regionInfo, type RegionInfo } from "@/lib/mapa/catalog";
 import type { MapaView } from "@/lib/server/mapa";
 
 const WORDS_PER_GAME = 66; // paraules reals per partida
@@ -27,6 +27,19 @@ export default function MapaClient({ view }: { view: MapaView }) {
     () => (pending > 0 ? REGIONS.map((r) => r.id).filter((id) => !claimedSet.has(id)) : []),
     [pending, claimedSet]
   );
+  // Selector textual: el mapa té ~100 regions i el teclat no hi hauria de
+  // passar per damunt; aquest desplegable agrupat per territori cobreix tant
+  // la navegació per teclat com la precisió al mòbil.
+  const territoryGroups = useMemo(() => {
+    const groups = new Map<string, RegionInfo[]>();
+    for (const r of REGIONS) {
+      if (!availableIds.includes(r.id)) continue;
+      const list = groups.get(r.territory) ?? [];
+      list.push(r);
+      groups.set(r.territory, list);
+    }
+    return [...groups.entries()];
+  }, [availableIds]);
 
   const info = regionInfo(selected ?? hovered ?? "");
   const infoRegion = info ? REGIONS.find((r) => r.id === info.id) ?? null : null;
@@ -88,10 +101,31 @@ export default function MapaClient({ view }: { view: MapaView }) {
           <b>Països Catalans complets.</b> Has respost tot el lèxic i el mapa és teu.
         </div>
       ) : pending > 0 ? (
-        <div className="notice mapa-pending">
-          Tens <b>{pending}</b> {pending === 1 ? "zona per col·locar" : "zones per col·locar"}: toca una
-          regió fosca del mapa i confirma.
-        </div>
+        <>
+          <div className="notice mapa-pending">
+            Tens <b>{pending}</b> {pending === 1 ? "zona per col·locar" : "zones per col·locar"}: toca una
+            regió fosca del mapa i confirma.
+          </div>
+          <div className="mapa-picker">
+            <label htmlFor="mapa-region-picker">O tria la zona pel nom</label>
+            <select
+              id="mapa-region-picker"
+              value={selected ?? ""}
+              onChange={(e) => setSelected(e.target.value || null)}
+            >
+              <option value="">— cap seleccionada —</option>
+              {territoryGroups.map(([territory, regions]) => (
+                <optgroup key={territory} label={territory}>
+                  {regions.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+        </>
       ) : (
         <p className="muted small">
           Propera zona en {view.wordsToNext?.toLocaleString("ca-ES")} paraules (aprox.{" "}
@@ -155,15 +189,17 @@ export default function MapaClient({ view }: { view: MapaView }) {
           </>
         ) : (
           <span className="muted">
-            Passa per damunt d&apos;una regió per veure&apos;n el nom{pending > 0 ? "; toca-la per triar-la" : ""}.
+            Passa per damunt d&apos;una regió per veure&apos;n el nom
+            {pending > 0 ? "; toca-la o tria-la pel nom per seleccionar-la" : ""}.
           </span>
         )}
       </div>
 
       <p className="small muted mapa-how">
-        Cada ~1% del lèxic (≈408 paraules reals vistes, uns 6–7 partides) desbloqueja una zona del
-        mapa. Tu tries quin territori pintes: quan hàgis respost tot el lèxic, els Països Catalans
-        sencers seran teus.
+        Les primeres zones arriben de seguida —la primera, en acabar la primera partida— i després
+        cada ~1% del lèxic (≈408 paraules reals vistes, uns 6–7 partides) desbloqueja la següent.
+        Tu tries quin territori pintes: quan hagis respost tot el lèxic, els Països Catalans sencers
+        seran teus.
       </p>
 
       <div className="actions">

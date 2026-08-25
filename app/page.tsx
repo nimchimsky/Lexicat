@@ -2,7 +2,7 @@ import Link from "next/link";
 import { currentPlayer } from "@/lib/server/auth";
 import { getPlayerSummary } from "@/lib/server/views";
 import { getMapaView } from "@/lib/server/mapa";
-import MapaCatala from "@/components/MapaCatala";
+import MapaBackdrop from "@/components/MapaBackdrop";
 import GuestButton from "@/components/GuestButton";
 
 export const dynamic = "force-dynamic";
@@ -24,16 +24,16 @@ export default async function Home() {
 
   return (
     <main className="home">
-      {/* El mapa viu darrere del contingut: decoratiu, sense res d'interacció */}
-      <div className="mapa-bg" aria-hidden="true">
-        <MapaCatala variant="compacte" claimedIds={mapa?.claimedIds ?? []} interactive={false} />
-      </div>
+      {/* El mapa viu darrere del contingut: decoratiu, sense res d'interacció.
+          Només en pantalles amples (al mòbil no es percep i s'estalvia ~425 KB). */}
+      <MapaBackdrop claimedIds={mapa?.claimedIds ?? []} />
 
       <header className="hero">
         <h1 className="wordmark">LEXICAT</h1>
         <span className="senyera wordmark-rule" aria-hidden="true" />
         <p className="subtitle">
-          Quantes paraules coneixes? Millora l&apos;estimació amb cada partida.
+          Descobreix quantes paraules catalanes coneixes. En 100 decisions
+          obtindràs una estimació, el teu percentil i mots per descobrir.
         </p>
       </header>
 
@@ -54,7 +54,7 @@ export default async function Home() {
           <span className="mode-num" aria-hidden="true">
             01
           </span>
-          <p className="mode-tag">Mode</p>
+          <p className="mode-tag">Estimació precisa</p>
           <p className="mode-name">Pompeu</p>
           <p className="mode-desc">
             Cent estímuls, set graus de seguretat. Demostra el teu vocabulari al
@@ -73,7 +73,7 @@ export default async function Home() {
           <span className="mode-num" aria-hidden="true">
             02
           </span>
-          <p className="mode-tag">Mode</p>
+          <p className="mode-tag">Contra rellotge</p>
           <p className="mode-name">Kilian</p>
           <p className="mode-desc">
             Cinc segons per paraula. Ratxes, multiplicadors i punts: el mateix

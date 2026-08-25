@@ -11,6 +11,7 @@ import { usePathname } from "next/navigation";
 const NAV = [
   { href: "/mapa", label: "Mapa" },
   { href: "/ranquings", label: "Rànquings" },
+  { href: "/estudi_23691891.html", label: "Estudi" },
   { href: "/compte", label: "Compte" },
 ];
 
@@ -28,7 +29,7 @@ export default function Chrome({ children }: { children: React.ReactNode }) {
         <div className="topbar-in">
           <Link href="/" className="topbar-mark">
             <span className="senyera h" aria-hidden="true" />
-            Lexicat
+            <span className="topbar-name">Lexicat</span>
           </Link>
           <nav className="topbar-nav">
             {NAV.map((n) => (

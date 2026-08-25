@@ -52,7 +52,8 @@ function PompeuResults({ view }: { view: GameResultsView }) {
       <p className="eyebrow">Partida acabada</p>
       <h1>Resultat</h1>
 
-      {/* §7.1 · Resum */}
+      {/* §7.1 · Resum: primer el que tothom vol saber (estimació, marge i
+          percentil). La maquinària estadística viu dins «Com ho calculem». */}
       <section className="result-hero">
         <p className="mode-tag">La teva estimació del lexicó</p>
         <span className="big-number">{fmt(s.pctLexicon)}%</span>
@@ -82,42 +83,11 @@ function PompeuResults({ view }: { view: GameResultsView }) {
           IC95 {fmt(s.pctLo)}% – {fmt(s.pctHi)}% · percentil {fmt(s.percentile, 0)}
         </p>
         <p className="small muted">
-          El percentil és entre els participants de l&apos;estudi de referència
-          (mediana 53 anys; dos terços amb estudis universitaris). És una
+          Percentil entre els participants de l&apos;estudi de referència. És una
           estimació, no un fet: amb una sola partida l&apos;interval és ample i
           s&apos;estreny a mesura que acumules partides.
         </p>
       </section>
-
-      <div className="statgrid">
-        <div className="stat">
-          <b>
-            {s.nCorrect}/{s.totalItems}
-          </b>
-          <span>encerts</span>
-        </div>
-        <div className="stat">
-          <b>{s.score.toLocaleString("ca-ES")}</b>
-          <span>puntuació</span>
-        </div>
-        <div className="stat">
-          <b>{fmt(s.dPrime, 2)}</b>
-          <span>d′ sensibilitat{nearCeiling ? " · al sostre" : ""}</span>
-        </div>
-        <div className="stat">
-          <b>{fmt(s.criterion, 2)}</b>
-          <span>
-            biaix {s.criterion > 0.15 ? "· conservador" : s.criterion < -0.15 ? "· permissiu" : ""}
-          </span>
-        </div>
-      </div>
-
-      {nearCeiling ? (
-        <p className="small muted">
-          El d′ màxim observable amb 66 paraules i 34 pseudoparaules és{" "}
-          {fmt(s.dPrimeCeiling, 2)}: hi ets.
-        </p>
-      ) : null}
 
       {/* Mapa: fitxes pendents o progrés cap a la propera zona */}
       <MapaAfterGame />
@@ -185,10 +155,50 @@ function PompeuResults({ view }: { view: GameResultsView }) {
             </li>
           ))}
         </ul>
+      </details>
+
+      {/* Detalls estadístics: d′, criteri, ε, calibratge i regles de puntuació */}
+      <details className="fold">
+        <summary>Com ho calculem</summary>
+        <div className="statgrid">
+          <div className="stat">
+            <b>
+              {s.nCorrect}/{s.totalItems}
+            </b>
+            <span>encerts</span>
+          </div>
+          <div className="stat">
+            <b>{s.score.toLocaleString("ca-ES")}</b>
+            <span>puntuació</span>
+          </div>
+          <div className="stat">
+            <b>{fmt(s.dPrime, 2)}</b>
+            <span>d′ sensibilitat{nearCeiling ? " · al sostre" : ""}</span>
+          </div>
+          <div className="stat">
+            <b>{fmt(s.criterion, 2)}</b>
+            <span>
+              biaix {s.criterion > 0.15 ? "· conservador" : s.criterion < -0.15 ? "· permissiu" : ""}
+            </span>
+          </div>
+        </div>
+
+        {nearCeiling ? (
+          <p className="small muted">
+            El d′ màxim observable amb 66 paraules i 34 pseudoparaules és{" "}
+            {fmt(s.dPrimeCeiling, 2)}: hi ets.
+          </p>
+        ) : null}
+
         <p className="small muted">
-          Cada ítem val més com més difícil és (pes W = mapatge lineal de la b
-          real a [1,3]); la regla premia declarar la confiança real. ε=0,02, K=10
-          (sc-1).
+          Cada ítem val més com més difícil és (pes W = mapatge lineal de la b real
+          a [1,3]); la regla premia declarar la confiança real. ε=0,02, K=10
+          (sc-1). Les respostes d&apos;exactament 50% ({s.nFiftyFifty}) no entren al d′.
+        </p>
+
+        <p className="small muted">
+          Conjunt de referència {view.referenceCorpusVersion} · calibratge i
+          percentil versionats: mai comparem partides calculades amb regles diferents.
         </p>
       </details>
 
@@ -198,11 +208,6 @@ function PompeuResults({ view }: { view: GameResultsView }) {
           als rànquings. Les dades es conserven.
         </div>
       ) : null}
-
-      <p className="small muted">
-        Conjunt de referència {view.referenceCorpusVersion} · les respostes
-        d&apos;exactament 50% ({s.nFiftyFifty}) no entren al d′.
-      </p>
 
       <div className="actions">
         <Link href="/joc" className="btn">
@@ -251,7 +256,7 @@ function KilianResults({ view }: { view: GameResultsView }) {
         </div>
         <div className="stat">
           <b>{k.nTimeouts}</b>
-          <span>{k.nTimeouts === 1 ? "fora de temps" : "fora de temps"}</span>
+          <span>fora de temps</span>
         </div>
       </div>
 

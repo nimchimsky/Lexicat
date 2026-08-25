@@ -155,3 +155,12 @@ export const RANKING_WINDOW = 5;
  * lib/mapa/thresholds.ts a partir del n_words del banc vigent.
  */
 export const MAPA_ZONES = 100;
+
+/**
+ * Inici ràpid de la progressió (revisió UX 25/08/2026): la primera zona cau
+ * en acabar la PRIMERA partida (66 paraules reals vistes), amb dues
+ * recompenses més aviat; a partir de la quarta el ritme torna al científic
+ * d'1% del banc per zona. Sense això, la primera fitxa tardava 6-7 partides:
+ * massa tard per generar retenció.
+ */
+export const MAPA_FAST_START_WORDS = [66, 150, 250] as const;

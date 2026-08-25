@@ -14,10 +14,10 @@ export const metadata: Metadata = {
     "Mesura el teu lèxic en català: 100 estímuls, cap feedback, la teva estimació al final.",
 };
 
+// Sense maximumScale: el pinyó de zoom és un requisit d'accessibilitat (WCAG 1.4.4).
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
   themeColor: "#0a0907",
 };
 

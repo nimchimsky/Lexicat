@@ -52,9 +52,9 @@ export default function Privadesa() {
       <h2>Com s&apos;esborra</h2>
       <p>
         A «El meu compte» tens el botó d&apos;esborrar. Quan l&apos;uses: el correu
-        desapareixen de la base de dades, el sobrenom passa a un identificador opac
-        i les sessions i tokens es destrueixen. <b>Les respostes ja entrada al
-        calibratge es conserven però completament deslligades de cap persona
+        desapareix de la base de dades, el sobrenom passa a un identificador opac
+        i les sessions i tokens es destrueixen. <b>Les respostes ja entrades al
+        calibratge es conserven, però completament deslligades de qualsevol persona
         identificable</b>: formen part de paràmetres estadístics agregats (la
         dificultat i la discriminació dels ítems) que ja no poden atribuir-se a
         ningú. Si demanes l&apos;esborrament abans que les teves respostes entrin

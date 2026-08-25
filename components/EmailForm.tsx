@@ -55,7 +55,9 @@ export default function EmailForm() {
 
   return (
     <form onSubmit={submit}>
+      <label htmlFor="email-input">El teu correu</label>
       <input
+        id="email-input"
         type="email"
         required
         inputMode="email"

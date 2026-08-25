@@ -1115,6 +1115,10 @@ details.fold[open] > *:last-child { margin-bottom: var(--s5); }
   -webkit-mask-image: linear-gradient(200deg, #000 8%, transparent 62%);
   mask-image: linear-gradient(200deg, #000 8%, transparent 62%);
 }
+/* Al mòbil gairebé no es percep i pesa ~425 KB: no es carrega ni es mostra */
+@media (max-width: 899px) {
+  .mapa-bg { display: none; }
+}
 
 /* ============================================================
    5 · RESULTATS
@@ -1313,6 +1317,18 @@ table.board tr.top td.rank {
 }
 table.board tr.top td.player { color: var(--text); font-weight: 650; }
 table.board tr.top td.value { color: var(--accent); }
+/* La teva fila, tant si cau dins el top com fixada damunt la taula */
+table.board tr.me td { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+table.board tr.me td.player { color: var(--accent); font-weight: 700; }
+.board-me {
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  padding: var(--s2) var(--s3);
+  margin: 0 0 var(--s3);
+  font-size: var(--fs-small);
+}
+.board-me b { color: var(--accent); }
 
 /* ============================================================
    6 · MAPA
@@ -1321,7 +1337,11 @@ table.board tr.top td.value { color: var(--accent); }
    Porta un <style> propi amb colors per defecte; per guanyar-lo en
    la cascada tots els selectors van amb .mapa-inject svg al davant. */
 
-.mapa-svg { position: relative; min-height: 60px; }
+/* L'espai queda reservat amb l'aspect-ratio real de cada SVG (viewBox):
+   sense això la pàgina salta d'uns 60 px a ~730 px quan arriba l'SVG. */
+.mapa-svg { position: relative; }
+.mapa-svg[data-variant="compacte"] { aspect-ratio: 3121 / 5016; }
+.mapa-svg[data-variant="geografic"] { aspect-ratio: 4960 / 3507; }
 .mapa-inject svg { display: block; width: 100%; height: auto; }
 .mapa-static { pointer-events: none; }
 
@@ -1468,6 +1488,9 @@ table.board tr.top td.value { color: var(--accent); }
 }
 .mapa-flash { color: var(--good); font-size: var(--fs-base); margin: var(--s2) 0; }
 .mapa-error { color: var(--bad); font-size: var(--fs-base); margin: var(--s2) 0; }
+
+/* Selector textual de zones (accessibilitat i precisió al mòbil) */
+.mapa-picker { max-width: 420px; margin: var(--s3) 0; }
 
 /* Llegenda dels estats */
 .mapa-legend {
@@ -1841,6 +1864,10 @@ table.board tr.top td.value { color: var(--accent); }
 }
 
 @media (max-width: 520px) {
+  .topbar-in { padding-inline: var(--s3); gap: var(--s1); }
+  .topbar-name { display: none; }
+  .topbar-nav { gap: 0; }
+  .topbar-nav a { padding-inline: var(--s2); }
   .profile-grid { grid-template-columns: 1fr; }
   .pagination { grid-template-columns: 1fr 1fr; }
   .pagination > span { grid-column: 1 / -1; grid-row: 1; text-align: center; }

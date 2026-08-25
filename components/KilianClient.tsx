@@ -476,7 +476,7 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
         <h1>Cinc segons. Sí o no.</h1>
         <p className="lead">
           Cada estímul té una barra de temps: els punts baixen amb ella.
-          Arrastrada a la dreta per dir que sí, a l&apos;esquerra per dir que no.
+          Arrossegada a la dreta per dir que sí, a l&apos;esquerra per dir que no.
         </p>
         <ul className="rules">
           <li>
@@ -491,7 +491,7 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
         </ul>
         <div className="actions">
           <button className="btn" onClick={() => (firstTime ? beginPractice() : void startGame())}>
-            {firstTime ? "Apren el gest" : "Comença"}
+            {firstTime ? "Aprèn el gest" : "Comença"}
           </button>
           {!firstTime ? (
             <button className="btn ghost" onClick={beginPractice}>

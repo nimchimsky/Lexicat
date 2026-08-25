@@ -113,7 +113,7 @@ export default async function Compte({
 
           <article className="card profile-mode-card">
             <p className="eyebrow">Mode</p>
-            <h3>Killian</h3>
+            <h3>Kilian</h3>
             <div className="statgrid">
               <div className="stat"><b>{killian.gamesCompleted}</b><span>partides acabades</span></div>
               <div className="stat"><b>{number(killian.meanScore)}</b><span>mitjana de punts</span></div>
@@ -139,7 +139,7 @@ export default async function Compte({
                 {view.recentGames.map((game) => (
                   <tr key={game.gameId}>
                     <td>{game.status === "completed" ? <Link href={`/resultats/${game.gameId}`}>{date(game.startedAt)}</Link> : date(game.startedAt)}</td>
-                    <td>{game.mode === "pompeu" ? "Pompeu" : "Killian"}</td>
+                    <td>{game.mode === "pompeu" ? "Pompeu" : "Kilian"}</td>
                     <td>{gameStatus(game)}</td>
                     <td className="num value">{gameResult(game)}</td>
                   </tr>

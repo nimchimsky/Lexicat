@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAPA_ZONES } from "@/lib/config";
+import { MAPA_ZONES, MAPA_FAST_START_WORDS } from "@/lib/config";
 import { nextZoneThreshold, zoneThresholds, zonesEarned } from "@/lib/mapa/thresholds";
 import { REGIONS, REGION_IDS, isRegionId } from "@/lib/mapa/catalog";
 
@@ -12,19 +12,50 @@ describe("zoneThresholds", () => {
     expect(t).toHaveLength(MAPA_ZONES);
   });
 
-  it("és monòton creixent", () => {
+  it("és monòton estrictament creixent", () => {
     for (let i = 1; i < t.length; i++) expect(t[i]).toBeGreaterThan(t[i - 1]);
   });
 
-  it("la primera zona cau a l'1% del banc i l'última a l'última paraula", () => {
-    expect(t[0]).toBe(Math.round(N_WORDS / MAPA_ZONES)); // 408
+  it("inici ràpid: les tres primeres zones tenen el llindar fix decidit", () => {
+    MAPA_FAST_START_WORDS.forEach((w, i) => expect(t[i]).toBe(w));
     expect(t[MAPA_ZONES - 1]).toBe(N_WORDS);
   });
 
-  it("la divisió fixa NO tancaria el mapa (motiu del round)", () => {
+  it("la primera zona cau en acabar la PRIMERA partida (66 paraules)", () => {
+    const wordsPerGame = 66;
+    expect(zonesEarned(wordsPerGame, t)).toBe(1);
+    expect(zonesEarned(wordsPerGame - 1, t)).toBe(0);
+  });
+
+  it("tres recompenses ràpides dins de les primeres quatre partides", () => {
+    const wordsPerGame = 66;
+    expect(zonesEarned(4 * wordsPerGame, t)).toBeGreaterThanOrEqual(3);
+  });
+
+  it("després de l'inici ràpid torna al ritme científic (~1% del banc per zona)", () => {
+    const tail = t.slice(MAPA_FAST_START_WORDS.length);
+    const gaps = tail.slice(1).map((x, i) => x - tail[i]);
+    const meanGap = gaps.reduce((s, g) => s + g, 0) / gaps.length;
+    expect(meanGap).toBeGreaterThan(380); // ≈408 paraules
+    expect(meanGap).toBeLessThan(440);
+  });
+
+  it("la divisió fixa NO tancaria el mapa: la interpolació sí", () => {
+    // Amb divisió fixa l'últim llindar quedaria per sota del total.
     const perZone = Math.floor(N_WORDS / MAPA_ZONES); // 408
     expect(perZone * MAPA_ZONES).toBeLessThan(N_WORDS);
-    expect(t[MAPA_ZONES - 1]).toBe(perZone * (MAPA_ZONES - 1) + (N_WORDS - perZone * 99));
+    expect(t[MAPA_ZONES - 1]).toBe(N_WORDS);
+  });
+});
+
+describe("zoneThresholds · banc petit (fallback lineal)", () => {
+  const N_SMALL = 500;
+  const t = zoneThresholds(N_SMALL);
+
+  it("manté 100 llindars estricte creixents amb l'últim a nWords", () => {
+    expect(t).toHaveLength(MAPA_ZONES);
+    for (let i = 1; i < t.length; i++) expect(t[i]).toBeGreaterThan(t[i - 1]);
+    expect(t[MAPA_ZONES - 1]).toBe(N_SMALL);
   });
 });
 
@@ -45,13 +76,6 @@ describe("zonesEarned / nextZoneThreshold", () => {
     expect(zonesEarned(N_WORDS, t)).toBe(MAPA_ZONES);
     expect(nextZoneThreshold(N_WORDS, t)).toBeNull();
     expect(zonesEarned(N_WORDS - 1, t)).toBe(MAPA_ZONES - 1);
-  });
-
-  it("el progrés avança a un ritme d'una zona per ~6-7 partides", () => {
-    const wordsPerGame = 66;
-    const at7Games = zonesEarned(7 * wordsPerGame, t);
-    expect(at7Games).toBeGreaterThanOrEqual(1);
-    expect(zonesEarned(6 * wordsPerGame, t)).toBeLessThanOrEqual(at7Games);
   });
 });
 

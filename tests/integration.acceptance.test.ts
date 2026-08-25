@@ -494,10 +494,10 @@ d("integració · mapa de zones", () => {
       expect(view.pending).toBe(0);
       await expect(claimRegion(pid, "catalunya--alt-camp")).rejects.toMatchObject({ status: 409 });
 
-      // 500 paraules vistes (T[0] = 408): exactament 1 fitxa.
-      await seedWordsSeen(c, pid, 500);
+      // 100 paraules vistes (T[0] = 66 amb l'inici ràpid): exactament 1 fitxa.
+      await seedWordsSeen(c, pid, 100);
       view = await getMapaView(pid);
-      expect(view.wordsSeen).toBe(500);
+      expect(view.wordsSeen).toBe(100);
       expect(view.earned).toBe(1);
       expect(view.pending).toBe(1);
 
@@ -526,7 +526,7 @@ d("integració · mapa de zones", () => {
     const c = await db();
     try {
       const pid = await newPlayer(c);
-      await seedWordsSeen(c, pid, 500); // 1 fitxa
+      await seedWordsSeen(c, pid, 100); // inici ràpid: 1 fitxa (66 ≤ 100 < 150)
       const [a, b] = await Promise.allSettled([
         claimRegion(pid, "illes-balears--mallorca"),
         claimRegion(pid, "carxe--carxe"),
