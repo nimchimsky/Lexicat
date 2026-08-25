@@ -7,7 +7,7 @@ import { cookies } from "next/headers";
 import { query } from "./db";
 import { HttpError } from "./http";
 
-export const SESSION_COOKIE = "pompeu_session";
+export const SESSION_COOKIE = "lexicat_session";
 const SESSION_TTL_MS = 180 * 24 * 60 * 60 * 1000;
 const MAGIC_TTL_MS = 15 * 60 * 1000;
 

@@ -4,16 +4,16 @@ import { Pool } from "pg";
 
 declare global {
   // eslint-disable-next-line no-var
-  var __pompeuPool: Pool | undefined;
+  var __lexicatPool: Pool | undefined;
 }
 
 export function getPool(): Pool {
-  if (!globalThis.__pompeuPool) {
+  if (!globalThis.__lexicatPool) {
     const cs = process.env.DATABASE_URL;
     if (!cs) throw new Error("DATABASE_URL no està definida");
-    globalThis.__pompeuPool = new Pool({ connectionString: cs, max: 10 });
+    globalThis.__lexicatPool = new Pool({ connectionString: cs, max: 10 });
   }
-  return globalThis.__pompeuPool;
+  return globalThis.__lexicatPool;
 }
 
 export async function query<T extends import("pg").QueryResultRow = import("pg").QueryResultRow>(

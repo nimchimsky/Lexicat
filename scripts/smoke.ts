@@ -30,7 +30,7 @@ async function main() {
   // 2) Canviar el token per sessió
   const verifyRes = await fetch(linkData.devUrl, { redirect: "manual" });
   cookieJar = cookieJar.concat(extractSetCookies(verifyRes.headers));
-  if (!cookieJar.some((c) => c.startsWith("pompeu_session"))) {
+  if (!cookieJar.some((c) => c.startsWith("lexicat_session"))) {
     throw new Error("La verificació no ha establert sessió");
   }
   const cookieHeader = cookieJar.join("; ");
@@ -117,7 +117,7 @@ async function main() {
   if (!guestRes.ok) throw new Error(`Convidat: HTTP ${guestRes.status}`);
   const guestCookies = extractSetCookies(guestRes.headers);
   const guestCookie = guestCookies.join("; ");
-  if (!guestCookie.includes("pompeu_session")) throw new Error("Sessió de convidat no establerta");
+  if (!guestCookie.includes("lexicat_session")) throw new Error("Sessió de convidat no establerta");
 
   const gStart = await fetch(`${base}/api/game/start`, {
     method: "POST",

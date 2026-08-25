@@ -47,7 +47,7 @@ export default function Chrome({ children }: { children: React.ReactNode }) {
       <div className="shell">{children}</div>
 
       <footer className="footer">
-        <span className="footer-mark">Lexicat · Mode Pompeu</span>
+        <span className="footer-mark">Lexicat · Lèxic català</span>
         <nav>
           <Link href="/privadesa">Protecció de dades</Link>
           <Link href="/ranquings">Rànquings</Link>
