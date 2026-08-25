@@ -80,11 +80,11 @@ export default async function Home() {
             lèxic, a tota velocitat.
           </p>
           {player ? (
-            <Link href="/killian" className="btn secondary">
+            <Link href="/killian" className="btn">
               Juga
             </Link>
           ) : (
-            <GuestButton primary={false} label="Juga ara" href="/killian" />
+            <GuestButton primary label="Juga ara" href="/killian" />
           )}
         </section>
       </div>

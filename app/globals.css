@@ -2023,7 +2023,8 @@ table.board tr.me td.player { color: var(--accent); font-weight: 700; }
   border-radius: var(--radius);
   padding: 0 var(--s1);
 }
-.kil-mute {
+.kil-mute,
+.kil-pause {
   background: none;
   border: none;
   color: var(--muted);
@@ -2033,6 +2034,8 @@ table.board tr.me td.player { color: var(--accent); font-weight: 700; }
   cursor: pointer;
   padding: var(--s1);
 }
+.kil-mute:disabled,
+.kil-pause:disabled { opacity: 0.4; cursor: default; }
 
 /* ---------- Escenari amb gest ---------- */
 
@@ -2061,6 +2064,17 @@ table.board tr.me td.player { color: var(--accent); font-weight: 700; }
   box-shadow: 0 0 24px color-mix(in srgb, var(--scale-yes) 35%, transparent);
 }
 .kil-stage.drag-no .kil-stage-card {
+  border-color: var(--scale-no);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--scale-no) 35%, transparent);
+}
+/* Gest registrat: en soltar el swipe la targeta queda decantada cap al costat
+   triat fins que el servidor retorna la puntuació — el registre es percep
+   instantani encara que la xarxa trigui. */
+.kil-stage.commit-yes .kil-stage-card {
+  border-color: var(--scale-yes);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--scale-yes) 35%, transparent);
+}
+.kil-stage.commit-no .kil-stage-card {
   border-color: var(--scale-no);
   box-shadow: 0 0 24px color-mix(in srgb, var(--scale-no) 35%, transparent);
 }
@@ -2105,22 +2119,34 @@ table.board tr.me td.player { color: var(--accent); font-weight: 700; }
   to { filter: brightness(1.5); }
 }
 
-/* ---------- Comandament: feedback + botons sí/no ---------- */
+/* ---------- Comandament: botons sí/no ---------- */
 
 .kil-dock { gap: var(--s2); }
+/* ---------- Feedback: gran, centrat, just sota les paraules ---------- */
 
 .kil-feedback {
-  min-height: 44px;
+  position: absolute;
+  left: 50%;
+  top: calc(50% + clamp(64px, 19vw, 116px));
+  transform: translateX(-50%);
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: center;
-  gap: var(--s3);
+  gap: var(--s4);
   font-family: var(--font-display);
-  font-size: var(--fs-h3);
+  font-size: clamp(34px, 10vw, 56px);
+  line-height: 1;
+  white-space: nowrap;
   visibility: hidden;
+  pointer-events: none;
+  z-index: 3;
 }
 .kil-feedback.show { visibility: visible; animation: kil-pop 260ms var(--ease); }
-.kil-feedback b { font-weight: 400; }
+.kil-feedback b {
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  text-shadow: 0 3px 20px rgba(0, 0, 0, 0.65);
+}
 .kil-feedback.ok b { color: var(--scale-yes); }
 .kil-feedback.ko b { color: var(--scale-no); }
 .kil-feedback.late b { color: var(--muted); }
@@ -2128,17 +2154,20 @@ table.board tr.me td.player { color: var(--accent); font-weight: 700; }
   font-style: normal;
   font-weight: 700;
   color: var(--accent);
+  text-shadow: 0 3px 20px rgba(0, 0, 0, 0.65);
 }
 .kil-feedback u {
   text-decoration: none;
-  font-size: var(--fs-small);
+  font-family: var(--font-body);
+  font-size: var(--fs-lead);
   color: var(--text2);
   letter-spacing: 0.04em;
+  align-self: center;
 }
 @keyframes kil-pop {
-  from { transform: scale(0.72); opacity: 0; }
-  60% { transform: scale(1.07); opacity: 1; }
-  to { transform: scale(1); opacity: 1; }
+  from { transform: translateX(-50%) scale(0.72); opacity: 0; }
+  60% { transform: translateX(-50%) scale(1.06); opacity: 1; }
+  to { transform: translateX(-50%) scale(1); opacity: 1; }
 }
 
 .kil-buttons {
@@ -2192,6 +2221,31 @@ table.board tr.me td.player { color: var(--accent); font-weight: 700; }
   letter-spacing: 0.03em;
 }
 .kil-intro .actions { display: flex; gap: var(--s3); align-items: center; }
+
+/* ---------- Pausa ---------- */
+
+/* Cobreix tota la partida: l'estímul queda tapat (no es pot estudiar la
+   paraula en pausa) i en continuar la barra reprèn exactament on era. */
+.kil-paused {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  padding: var(--s6);
+  text-align: center;
+}
+.kil-paused .eyebrow { align-self: stretch; }
+.kil-paused h2 { margin: var(--s3) 0 0; }
+.kil-paused .btn {
+  width: auto;
+  min-width: min(280px, 100%);
+  margin-top: var(--s5);
+}
 
 /* ---------- Resultats: la partida en un cop d'ull ---------- */
 

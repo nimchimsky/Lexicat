@@ -227,3 +227,19 @@ Mode arcade binari amb rellotge, decisions del Roger del mateix dia.
   el top-50 se aplica ja ordenat per punts.
 - **Índex 0006** (`responses(player_id,item_id) WHERE is_word`) per al
   recompte de paraules vistes; pols del mapa acotat a 3 iteracions.
+
+### Ajustos d'UX (25/08/2026, decisió Roger)
+
+- **El feedback entra a l'escenari** (revoca la decisió «fora de l'escenari»
+  del 24/08): el resultat cau gran i centrat, just sota les paraules, per
+  llegir-se d'un cop d'ull sense baixar la vista cap als botons. La caixa de
+  l'estímul no es transforma ni s'anima: el pop és del propi feedback.
+- **Confirmació immediata del swipe:** en soltar el gest la targeta queda
+  decantada cap al costat triat (vora encesa + tic sonor/hàptic) mentre el
+  servidor puntuà; l'espera de xarxa ja no es percep com una resposta perduda.
+- **Botó de pausa a Kilian:** només amb la barra corrent; tapa tota la
+  pantalla (l'estímul no es pot estudiar en pausa), congela la barra i
+  l'`elapsed_ms` de l'ítem es desplaça el temps pausat — en continuar, els
+  punts que toquen són els de la fracció de barra visible restant.
+- **Botó «Juga» de Kilian groc** com el de Pompeu: mateixa crida a l'acció
+  als dos modes de la portada.

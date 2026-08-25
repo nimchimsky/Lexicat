@@ -41,7 +41,7 @@ interface KilianOutcome {
   itemWasWord: boolean;
 }
 
-type Phase = "intro" | "practice" | "loading" | "playing" | "feedback" | "retry";
+type Phase = "intro" | "practice" | "loading" | "playing" | "paused" | "feedback" | "retry";
 
 /** El miniaprenentatge només té exemples declarats com a tals: cap dada del banc. */
 const PRACTICE: { text: string; isWord: boolean }[] = [
@@ -97,6 +97,9 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
   const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const barFillRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
+  /** Fracció de barra restant: permet aturar-la i reprenre-la (pausa). */
+  const barRemain = useRef(1);
+  const pauseStartedAt = useRef(0);
   const cache = useRef(new Map<number, ItemPayload>());
   const pending = useRef<{
     body: Record<string, unknown>;
@@ -157,14 +160,24 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
     rafRef.current = 0;
   }, []);
 
-  /** La barra corre amb rAF des del moment exacte en què l'estímul apareix. */
+  /**
+   * La barra corre amb rAF des del moment exacte en què l'estímul apareix.
+   * `remainFraction` permet reprenre-la després d'una pausa exactament on era.
+   */
   const runBar = useCallback(
-    (onExpire: () => void) => {
+    (onExpire: () => void, remainFraction = 1) => {
       stopBar();
+      const fraction = Math.max(0, Math.min(1, remainFraction));
+      const duration = KILIAN_BAR_MS * fraction;
       const start = performance.now();
+      if (duration <= 0) {
+        onExpire();
+        return;
+      }
       const tick = () => {
         const elapsed = performance.now() - start;
-        const remain = Math.max(0, 1 - elapsed / KILIAN_BAR_MS);
+        const remain = Math.max(0, fraction * (1 - elapsed / duration));
+        barRemain.current = remain;
         if (barFillRef.current) {
           barFillRef.current.style.transform = `scaleX(${remain})`;
           barFillRef.current.classList.toggle("urgent", remain < 0.24);
@@ -211,10 +224,17 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
       shownAt.current = performance.now();
       submitLock.current = false;
       responseId.current = crypto.randomUUID();
+      // Neteja la decantació del gest registrat (swipe) de l'ítem anterior.
+      const stage = stageRef.current;
+      if (stage) {
+        stage.style.setProperty("--drag-x", "0px");
+        stage.classList.remove("commit-yes", "commit-no");
+      }
       if (barFillRef.current) {
         barFillRef.current.style.transform = "scaleX(1)";
         barFillRef.current.classList.remove("urgent");
       }
+      barRemain.current = 1;
       setPhase("playing");
       // L'expiració envia un timeout (choice null): mateix camí que un gest.
       runBar(() => respondRef.current(null));
@@ -352,6 +372,24 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
     void send(choice, method ?? null);
   };
 
+  // ------------------------------------------------------------------ pausa
+  // La pausa tapa l'estímul i congela la barra: no es pot estudiar la paraula
+  // ni perdre punts mentre dura. L'elapsed de l'ítem es desplaça el temps
+  // pausat, així els punts en continuar són els que tocarien.
+  function pauseGame() {
+    if (phase !== "playing") return;
+    stopBar();
+    pauseStartedAt.current = performance.now();
+    setPhase("paused");
+  }
+
+  function resumeGame() {
+    if (phase !== "paused" || !gameId || !item) return;
+    shownAt.current += performance.now() - pauseStartedAt.current;
+    setPhase("playing");
+    runBar(() => respondRef.current(null), barRemain.current);
+  }
+
   // ------------------------------------------------------------------ partida nova
   async function startGame() {
     setPhase("loading");
@@ -437,8 +475,24 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
     if (!committed) return;
     if (Math.abs(dx) > SWIPE_THRESHOLD_PX && Math.abs(dx) > Math.abs(dy) * 1.4) {
       const dir = dx > 0 ? "yes" : "no";
-      if (phase === "practice") practiceRespond(dir);
-      else respondRef.current(dir, "swipe");
+      if (phase === "practice") {
+        practiceRespond(dir);
+        return;
+      }
+      // Si la barra ha expirat mig gest (timeout ja enviat) o hi ha un enviament
+      // en curs, el servidor no acceptarà res: cap confirmació enganyosa.
+      if (submitLock.current || phase !== "playing") return;
+      // Confirmació immediata del gest: la targeta queda decantada cap al
+      // costat triat (vora encesa) amb un tic, mentre el servidor puntuà.
+      // Sense això, l'espera de xarxa es percep com una resposta perduda.
+      const stage = stageRef.current;
+      if (stage) {
+        stage.style.setProperty("--drag-x", dir === "yes" ? "44px" : "-44px");
+        stage.classList.add(dir === "yes" ? "commit-yes" : "commit-no");
+      }
+      beep(dir === "yes" ? 520 : 360, 60, "sine", 0.05);
+      haptic(10);
+      respondRef.current(dir, "swipe");
     }
   }
 
@@ -602,6 +656,15 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
           </span>
           <button
             type="button"
+            className="kil-mute kil-pause"
+            onClick={pauseGame}
+            disabled={phase !== "playing"}
+            aria-label="Pausa la partida"
+          >
+            pausa
+          </button>
+          <button
+            type="button"
             className="kil-mute"
             onClick={toggleMute}
             aria-label={muted ? "Activa el so" : "Silencia"}
@@ -628,8 +691,8 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
         </div>
       </div>
 
-      {/* Escenari: l'estímul i la seva barra. Cap element de feedback aquí:
-          el resultat cau sempre al comandament de sota (decisió Roger). */}
+      {/* Escenari: l'estímul, la seva barra i el feedback gran i centrat
+          just sota les paraules (decisió Roger 25/08/2026). */}
       <div
         ref={stageRef}
         className="kil-stage"
@@ -652,19 +715,12 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
         <div className="kil-timer" aria-hidden="true">
           <div ref={barFillRef} className="kil-bar-fill" />
         </div>
-        {practicing ? (
-          <p className="kil-practice-tip">
-            Exemple {current.position} de 3 ·{" "}
-            {PRACTICE[current.position - 1].isWord
-              ? "existeix: llisca a la dreta"
-              : "inventada: llisca a l'esquerra"}
-          </p>
-        ) : null}
-      </div>
-
-      <div className="dock kil-dock">
-        {/* Ranura de feedback: alçada fixa, mai a l'escenari. */}
-        <div className={`kil-feedback${outcome ? ` show ${outcome.isCorrect ? "ok" : outcome.kind === "timeout" ? "late" : "ko"}` : ""}`} aria-live="polite">
+        {/* Feedback gran, al mig de l'escenari: es llegueix d'un cop d'ull
+            sense baixar la vista cap als botons. */}
+        <div
+          className={`kil-feedback${outcome ? ` show ${outcome.isCorrect ? "ok" : outcome.kind === "timeout" ? "late" : "ko"}` : ""}`}
+          aria-live="polite"
+        >
           {outcome ? (
             outcome.isCorrect ? (
               <>
@@ -681,7 +737,17 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
             )
           ) : null}
         </div>
+        {practicing ? (
+          <p className="kil-practice-tip">
+            Exemple {current.position} de 3 ·{" "}
+            {PRACTICE[current.position - 1].isWord
+              ? "existeix: llisca a la dreta"
+              : "inventada: llisca a l'esquerra"}
+          </p>
+        ) : null}
+      </div>
 
+      <div className="dock kil-dock">
         <div className="kil-buttons">
           <button
             className="kil-btn no"
@@ -704,6 +770,21 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
           </p>
         ) : null}
       </div>
+
+      {/* Pausa: cobreix tota la pantalla (l'estímul queda tapat) i el temps
+          no corre: la barra reprèn exactament on era en continuar. */}
+      {phase === "paused" ? (
+        <div className="kil-paused" role="dialog" aria-modal="true" aria-label="Partida en pausa">
+          <p className="eyebrow">Pausa</p>
+          <h2>La partida espera.</h2>
+          <p className="muted small">
+            Estímul tapat i rellotge congelat: res no corre mentre duri la pausa.
+          </p>
+          <button className="btn" onClick={resumeGame}>
+            Continua
+          </button>
+        </div>
+      ) : null}
     </main>
   );
 }
