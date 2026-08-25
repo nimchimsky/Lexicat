@@ -9,8 +9,12 @@
 // els colors per defecte i els estats (claimed/available/selected) sense
 // cap API de missatgeria. L'SVG es descarrega una vegada i el navegador
 // el cacheja; cap geometria no entra al bundle JS.
+//
+// El tooltip NO passa per estat de React en moure el ratolí: la posició
+// s'escriu per refs (CSS left/top), i l'estat només canvia quan canvia la
+// regió sota el cursor. Un re-render per píxel és un malbaratament.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 export type MapaVariant = "compacte" | "geografic";
 
@@ -38,8 +42,6 @@ type Status = "loading" | "ready" | "error";
 interface Tip {
   name: string;
   territory: string;
-  x: number;
-  y: number;
 }
 
 export default function MapaCatala({
@@ -53,13 +55,15 @@ export default function MapaCatala({
 }: MapaCatalaProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  const tipRef = useRef<HTMLDivElement | null>(null);
   const [status, setStatus] = useState<Status>("loading");
   const [attempt, setAttempt] = useState(0);
   const [tip, setTip] = useState<Tip | null>(null);
   const lastHover = useRef<string | null>(null);
-  // Identificador únic per instància: els SVG porten id="map-title"/"map-desc"
-  // fixos i dues instàncies a la mateixa pàgina no poden xocar.
-  const uid = useMemo(() => `m${Math.random().toString(36).slice(2, 8)}`, []);
+  const rafPending = useRef(0);
+  // Identificador únic per instància (SSR-safe): els SVG porten
+  // id="map-title"/"map-desc" fixos i dues instàncies no poden xocar.
+  const uid = useId();
 
   // Càrrega + injecta l'SVG de la variant.
   useEffect(() => {
@@ -84,6 +88,7 @@ export default function MapaCatala({
         for (const g of boxRef.current.querySelectorAll("g.lexic-region")) {
           g.removeAttribute("tabindex");
           g.removeAttribute("role");
+          g.removeAttribute("aria-pressed");
         }
         setStatus("ready");
       })
@@ -108,7 +113,6 @@ export default function MapaCatala({
       else if (claimed.has(id)) g.setAttribute("data-state", "claimed");
       else if (available.has(id)) g.setAttribute("data-state", "available");
       else g.removeAttribute("data-state");
-      g.setAttribute("aria-pressed", claimed.has(id) ? "true" : "false");
     }
   }, [status, claimedIds, availableIds, selectedId, variant]);
 
@@ -130,33 +134,42 @@ export default function MapaCatala({
     return { x, y: Math.max(clientY - r.top, 0) };
   }, []);
 
-  const showTipFor = useCallback(
-    (t: EventTarget | null, clientX?: number, clientY?: number) => {
-      if (!(t instanceof Element)) return;
-      const g = t.closest("g.lexic-region[data-region-id]");
-      if (!g) return;
-      const pos =
-        clientX !== undefined && clientY !== undefined
-          ? tipAt(clientX, clientY)
-          : (() => {
-              const wrap = wrapRef.current;
-              if (!wrap) return null;
-              const r = g.getBoundingClientRect();
-              const w = wrap.getBoundingClientRect();
-              return {
-                x: Math.min(Math.max(r.left + r.width / 2 - w.left, 80), Math.max(w.width - 80, 80)),
-                y: Math.max(r.top - w.top, 0),
-              };
-            })();
-      if (!pos) return;
-      setTip({
-        name: g.getAttribute("data-name") ?? g.getAttribute("data-region-id") ?? "",
-        territory: g.getAttribute("data-territory") ?? "",
-        ...pos,
+  /** Posiciona el tooltip DIRECTAMENT al DOM (sense re-render), com a molt
+   *  un cop per frame. */
+  const moveTipTo = useCallback(
+    (clientX: number, clientY: number) => {
+      if (rafPending.current) return;
+      rafPending.current = requestAnimationFrame(() => {
+        rafPending.current = 0;
+        const pos = tipAt(clientX, clientY);
+        if (pos && tipRef.current) {
+          tipRef.current.style.left = `${pos.x}px`;
+          tipRef.current.style.top = `${pos.y}px`;
+        }
       });
     },
     [tipAt]
   );
+
+  const showTipFor = useCallback(
+    (t: EventTarget | null) => {
+      if (!(t instanceof Element)) return;
+      const g = t.closest("g.lexic-region[data-region-id]");
+      if (!g) return;
+      const next = {
+        name: g.getAttribute("data-name") ?? g.getAttribute("data-region-id") ?? "",
+        territory: g.getAttribute("data-territory") ?? "",
+      };
+      setTip((current) =>
+        current && current.name === next.name && current.territory === next.territory ? current : next
+      );
+    },
+    []
+  );
+
+  useEffect(() => () => {
+    if (rafPending.current) cancelAnimationFrame(rafPending.current);
+  }, []);
 
   return (
     <div
@@ -187,24 +200,22 @@ export default function MapaCatala({
           const id = regionFrom(e.target);
           if (id && availableIds.includes(id)) onPick?.(id);
         }}
-        onKeyDown={(e) => {
-          if (e.key !== "Enter" && e.key !== " ") return;
-          const id = regionFrom(e.target);
-          if (id && availableIds.includes(id)) {
-            e.preventDefault();
-            onPick?.(id);
-          }
-        }}
         onMouseOver={(e) => {
           const id = regionFrom(e.target);
           if (id && id !== lastHover.current) {
             lastHover.current = id;
             onHover?.(id);
           }
-          if (id) showTipFor(e.target, e.clientX, e.clientY);
+          if (id) {
+            showTipFor(e.target);
+            moveTipTo(e.clientX, e.clientY);
+          }
         }}
         onMouseMove={(e) => {
-          if (lastHover.current) showTipFor(e.target, e.clientX, e.clientY);
+          if (lastHover.current) {
+            moveTipTo(e.clientX, e.clientY);
+            showTipFor(e.target);
+          }
         }}
         onMouseOut={(e) => {
           if (regionFrom(e.target) && !regionFrom(e.relatedTarget)) {
@@ -213,24 +224,9 @@ export default function MapaCatala({
             onHover?.(null);
           }
         }}
-        onFocusCapture={(e) => {
-          const id = regionFrom(e.target);
-          if (id && id !== lastHover.current) {
-            lastHover.current = id;
-            onHover?.(id);
-          }
-          if (id) showTipFor(e.target);
-        }}
-        onBlurCapture={(e) => {
-          if (regionFrom(e.target) && !regionFrom(e.relatedTarget)) {
-            lastHover.current = null;
-            setTip(null);
-            onHover?.(null);
-          }
-        }}
       />
       {tip ? (
-        <div className="mapa-tip" style={{ left: tip.x, top: tip.y }} aria-hidden="true">
+        <div ref={tipRef} className="mapa-tip" aria-hidden="true">
           {tip.name} ({tip.territory})
         </div>
       ) : null}

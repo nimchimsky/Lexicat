@@ -14,6 +14,24 @@ function extractSetCookies(headers: Headers): string[] {
   return raw.map((c) => c.split(";")[0]);
 }
 
+/**
+ * El flux vigent: el devUrl apunta a la pàgina intermèdia
+ * /entrar/verificar?token=…, i la sessió s'estableix NOMÉS amb un POST a
+ * /api/auth/verify (cap canvi d'estat per GET: els previews del correu no
+ * cremen el token).
+ */
+async function redeemToken(devUrl: string, cookieJar: string[]): Promise<string[]> {
+  const token = new URL(devUrl).searchParams.get("token");
+  if (!token) throw new Error(`El devUrl no porta token: ${devUrl}`);
+  const res = await fetch(`${base}/api/auth/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: cookieJar.join("; ") },
+    body: JSON.stringify({ token }),
+  });
+  if (!res.ok) throw new Error(`verify: HTTP ${res.status} ${await res.text()}`);
+  return cookieJar.concat(extractSetCookies(res.headers));
+}
+
 async function main() {
   const email = `smoke-${Date.now()}@test.cat`;
   let cookieJar: string[] = [];
@@ -27,9 +45,14 @@ async function main() {
   const linkData = await linkRes.json();
   if (!linkData.devUrl) throw new Error(`Sense devUrl (SMTP configurat?): ${JSON.stringify(linkData)}`);
 
-  // 2) Canviar el token per sessió
-  const verifyRes = await fetch(linkData.devUrl, { redirect: "manual" });
-  cookieJar = cookieJar.concat(extractSetCookies(verifyRes.headers));
+  // 1b) La pàgina intermèdia NO consumeix el token ni estableix sessió per GET.
+  const preview = await fetch(linkData.devUrl, { redirect: "manual" });
+  if (extractSetCookies(preview.headers).some((c) => c.startsWith("lexicat_session"))) {
+    throw new Error("Un GET de la pàgina de verificació ha establert sessió: hauria de ser impossible");
+  }
+
+  // 2) Canviar el token per sessió (POST, com el botó de la intersticial)
+  cookieJar = await redeemToken(linkData.devUrl, cookieJar);
   if (!cookieJar.some((c) => c.startsWith("lexicat_session"))) {
     throw new Error("La verificació no ha establert sessió");
   }
@@ -109,7 +132,8 @@ async function main() {
   if (!html.includes("%")) throw new Error("La pàgina de resultats no mostra percentatge");
   if (!html.includes("IC95")) throw new Error("La pàgina de resultats no mostra l'interval");
   if (!html.includes("dlc.iec.cat")) throw new Error("Sense enllaços al DIEC");
-  if (!html.includes("punts")) throw new Error("La pàgina de resultats no mostra la puntuació per ítem");
+  // Els punts de cada ítem cauen en files amb class="pts" (DECISIONS §11).
+  if (!html.includes('class="pts"')) throw new Error("La pàgina de resultats no mostra la puntuació per ítem");
   console.log("Pantalla de resultats: %, IC95, DIEC i punts per ítem presents ✔");
 
   // 8) Flux de convidat: sense cap login
@@ -161,44 +185,57 @@ async function main() {
   });
   const link2 = await linkRes2.json();
   if (!link2.devUrl) throw new Error("Sense devUrl per l'upgrade");
-  await fetch(link2.devUrl, { redirect: "manual", headers: { Cookie: guestCookie } });
-  const meRes = await fetch(`${base}/api/me`, { headers: { Cookie: guestCookie } });
+  cookieJar = await redeemToken(link2.devUrl, guestCookie.split("; "));
+  await fetch(`${base}/api/me`, { headers: { Cookie: cookieJar.join("; ") } });
+  const meRes = await fetch(`${base}/api/me`, { headers: { Cookie: cookieJar.join("; ") } });
   const meData2 = await meRes.json();
   if (!meData2.player || meData2.player.email !== upgradeEmail) {
     throw new Error(`L'upgrade de convidat no ha conservat la identitat: ${JSON.stringify(meData2.player)}`);
   }
   console.log("Upgrade convidat→compte: mateixa identitat, correu assignat ✔");
 
-  // 10) Mapa: progrés derivat de la partida completa (66 paraules reals →
-  // encara sense fitxa: el primer llindar és a ~408) i reclamació barrada.
+  // 10) Mapa: amb l'arrencada ràpida (MAPA_FAST_START_WORDS), la primera
+  // zona cau en acabar la PRIMERA partida (66 paraules vistes): 1 fitxa
+  // pendent, reclamable. El progrés sempre es deriva de responses.
   const mapaRes = await fetch(`${base}/api/mapa`, { headers: { Cookie: cookieHeader } });
   if (!mapaRes.ok) throw new Error(`API mapa: HTTP ${mapaRes.status}`);
   const mapa = await mapaRes.json();
   if (mapa.wordsSeen !== 66) throw new Error(`Mapa: paraules vistes ${mapa.wordsSeen} ≠ 66`);
-  if (mapa.earned !== 0 || mapa.pending !== 0) {
-    throw new Error(`Mapa: amb 66 paraules no n'hi hauria d'haver cap fitxa (${JSON.stringify(mapa)})`);
+  if (mapa.earned !== 1 || mapa.pending !== 1) {
+    throw new Error(`Mapa: amb 66 paraules hi ha d'haver exactament 1 fitxa (${JSON.stringify(mapa)})`);
   }
   // Denominador coherent: el banc net exclou 4 paraules sense DIEC → 40.773.
   if (mapa.zones !== 100 || mapa.wordsTotal !== 40773) {
     throw new Error(`Mapa: constants inesperades ${mapa.zones}/${mapa.wordsTotal}`);
   }
-  const claimNo = await fetch(`${base}/api/mapa/claim`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Cookie: cookieHeader },
-    body: JSON.stringify({ regionId: "catalunya--alt-camp" }),
-  });
-  if (claimNo.status !== 409) throw new Error(`Reclamació sense fitxa: HTTP ${claimNo.status} (esperat 409)`);
   const claimBad = await fetch(`${base}/api/mapa/claim`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Cookie: cookieHeader },
     body: JSON.stringify({ regionId: "catalunya--no-existeix" }),
   });
   if (claimBad.status !== 400) throw new Error(`Regió desconeguda: HTTP ${claimBad.status} (esperat 400)`);
+  // Amb fitxa pendent la reclamació reeixeix i gasta l'única fitxa.
+  const claimOk = await fetch(`${base}/api/mapa/claim`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: cookieHeader },
+    body: JSON.stringify({ regionId: "catalunya--alt-camp" }),
+  });
+  if (!claimOk.ok) throw new Error(`Reclamació amb fitxa: HTTP ${claimOk.status}`);
+  const claimNo = await fetch(`${base}/api/mapa/claim`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: cookieHeader },
+    body: JSON.stringify({ regionId: "catalunya--priorat" }),
+  });
+  if (claimNo.status !== 409) throw new Error(`Segona reclamació sense fitxa: HTTP ${claimNo.status} (esperat 409)`);
+  const mapaAfter = await (await fetch(`${base}/api/mapa`, { headers: { Cookie: cookieHeader } })).json();
+  if (!mapaAfter.claimedIds.includes("catalunya--alt-camp") || mapaAfter.pending !== 0) {
+    throw new Error(`Mapa post-reclamació inesperat: ${JSON.stringify(mapaAfter)}`);
+  }
   const mapaPage = await fetch(`${base}/mapa`, { headers: { Cookie: cookieHeader } });
   if (!mapaPage.ok) throw new Error(`Pàgina /mapa: HTTP ${mapaPage.status}`);
   const svgCompact = await fetch(`${base}/mapa/paisos-catalans-100.compact.svg`);
   if (!svgCompact.ok) throw new Error("L'SVG compacte no es serveix des de /public");
-  console.log("Mapa: progrés derivat, reclamació barrada sense fitxa, pàgina i SVG servits ✔");
+  console.log("Mapa: arrencada ràpida amb 1 fitxa per la primera partida, reclamació transaccional ✔");
 
   console.log("\nSMOKE TEST COMPLETAT AMB ÈXIT ✔");
 }

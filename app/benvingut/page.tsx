@@ -13,6 +13,8 @@ export default async function Benvingut({
   if (!player) redirect("/entrar");
   if (player.nickname) redirect("/joc");
   const { error } = await searchParams;
+  // Next ja descodifica el searchParam: un decodeURIComponent addicional
+  // corromp (o petava amb) qualsevol missatge que dugui un % literal.
   return (
     <main>
       <p className="eyebrow">Benvingut</p>
@@ -21,7 +23,7 @@ export default async function Benvingut({
         És com apareixeràs als rànquings. Pots posar el que vulguis; el teu
         correu queda privat.
       </p>
-      {error && <div className="notice">{decodeURIComponent(error)}</div>}
+      {error && <div className="notice">{error}</div>}
       <NicknameForm />
     </main>
   );

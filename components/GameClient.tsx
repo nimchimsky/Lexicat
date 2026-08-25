@@ -2,7 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { SLIDER_LIKERT_LABELS, SLIDER_STEPS } from "@/lib/config";
+import {
+  SLIDER_LIKERT_LABELS,
+  SLIDER_STEPS,
+  BUTTON_LABELS,
+  BUTTON_CONFIDENCE,
+  GAME_LENGTH,
+} from "@/lib/config";
+import { backoffDelay, isOffline, postJson, responseErrorMessage } from "@/lib/client/api";
+import { Stimulus, LoadingScreen, ProgressTicks } from "@/components/game/Shared";
+import { RetryScreen } from "@/components/game/RetryScreen";
 
 interface ItemPayload {
   position: number;
@@ -12,7 +21,6 @@ interface ItemPayload {
 
 export interface GameClientProps {
   openGame: { gameId: string; nextPosition: number; responseFormat: string; sliderSteps: number | null } | null;
-  buttonLabels: readonly string[];
 }
 
 type Phase = "loading" | "playing" | "submitting" | "retry" | "done";
@@ -35,26 +43,7 @@ type PendingSubmission = {
  * Cada resposta porta un UUID generat al client (idempotència §8.5) i mesures
  * de temps per poder estudiar el cost real del format (§8.4).
  */
-/** L'estímul SEMPRE en una sola línia; «l·l» s'envolta d'aire per llegir-se bé. */
-function Stimulus({ text }: { text: string }) {
-  const parts = text.split(/(l·l)/g);
-  if (parts.length === 1) return <>{text}</>;
-  return (
-    <>
-      {parts.map((p, i) =>
-        p === "l·l" ? (
-          <span key={i} className="gemil">
-            {p}
-          </span>
-        ) : (
-          <span key={i}>{p}</span>
-        )
-      )}
-    </>
-  );
-}
-
-export default function GameClient({ openGame, buttonLabels }: GameClientProps) {
+export default function GameClient({ openGame }: GameClientProps) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("loading");
   const [gameId, setGameId] = useState<string | null>(openGame?.gameId ?? null);
@@ -82,12 +71,12 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
 
   const loadItem = useCallback(async (gid: string, position: number, attempt = 0): Promise<void> => {
     try {
+      if (attempt > 0 && isOffline()) throw new Error("Sense connexió");
       const res = await fetch(`/api/game/item?gameId=${gid}&position=${position}`, {
         cache: "no-store",
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? `HTTP ${res.status}`);
+        throw new Error(await responseErrorMessage(res));
       }
       const data: ItemPayload = await res.json();
       setItem(data);
@@ -101,12 +90,13 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
       setPhase("playing");
     } catch (e) {
       if (attempt < 4) {
-        setTimeout(() => void loadItem(gid, position, attempt + 1), 800 * (attempt + 1));
+        setTimeout(() => void loadItem(gid, position, attempt + 1), backoffDelay(attempt));
       } else {
         setError((e as Error).message);
         setPhase("retry");
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -122,12 +112,11 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
     setError(null);
     submitLock.current = false;
     try {
-      const res = await fetch("/api/game/start", { method: "POST" });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? "No s'ha pogut començar");
-      }
-      const data = await res.json();
+      const data = await postJson<{
+        gameId: string;
+        responseFormat?: string;
+        sliderSteps?: number;
+      }>("/api/game/start", {});
       setGameId(data.gameId);
       setFormat(data.responseFormat ?? "buttons");
       if (data.sliderSteps) setSteps(data.sliderSteps);
@@ -146,9 +135,9 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
 
   /**
    * El slider ES RESPO EN DEIXAR-LO ANAR: arrossegant o picant directament a la
-   * posició (el botó de confirmar sobra i cal velocitat). Amb 7 passos els
-   * índexs són 0..6 → confiança k/6; el centre cau exactament a 0,50, coherent
-   * amb la regla de desempat del servidor. El bloqueig evita el doble
+   * posició (el botó de confirmar sobra i cal velocitat). Amb N passos els
+   * índexs són 0..N−1 → confiança k/(N−1); el centre cau exactament a 0,50,
+   * coherent amb la regla de desempat del servidor. El bloqueig evita el doble
    * enviament pointerup+touchend d'alguns navegadors.
    */
   function commitSliderRelease() {
@@ -158,6 +147,10 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
     submitLock.current = true;
     registerFirstInput();
     void submit(Number(el.value) / (steps - 1));
+  }
+
+  async function postResponse(body: PendingSubmission["body"]): Promise<{ finished: boolean }> {
+    return postJson<{ finished: boolean }>("/api/game/response", body);
   }
 
   async function submit(confidence: number) {
@@ -176,16 +169,7 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
     };
     pendingSubmission.current = { body, position: item.position };
     try {
-      const res = await fetch("/api/game/response", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? `HTTP ${res.status}`);
-      }
-      const data = await res.json();
+      const data = await postResponse(body);
       pendingSubmission.current = null;
       if (data.finished) {
         router.push(`/resultats/${gameId}`);
@@ -204,16 +188,7 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
     if (!pending) return;
     setPhase("submitting");
     try {
-      const res = await fetch("/api/game/response", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(pending.body),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? `HTTP ${res.status}`);
-      }
-      const data = await res.json();
+      const data = await postResponse(pending.body);
       pendingSubmission.current = null;
       if (data.finished) {
         router.push(`/resultats/${pending.body.gameId}`);
@@ -237,10 +212,10 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
         </p>
         <ul className="rules">
           <li>
-            <b>100</b> estímuls per partida
+            <b>{GAME_LENGTH}</b> estímuls per partida
           </li>
           <li>
-            <b>7</b> graus de seguretat, del «segur que no» al «segur que sí»
+            <b>{SLIDER_STEPS}</b> graus de seguretat, del «segur que no» al «segur que sí»
           </li>
           <li>
             <b>0</b> correccions durant el camí
@@ -255,39 +230,20 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
 
   if (phase === "retry") {
     return (
-      <main className="game-intro">
-        <p className="eyebrow">Connexió</p>
-        <h1>S&apos;ha perdut el fil.</h1>
-        <p className="lead">{error}</p>
-        <p className="muted small">
-          La partida queda desada al servidor: es reprèn exactament on era.
-        </p>
-        <button
-          className="btn"
-          onClick={() => {
-            setError(null);
-            if (pendingSubmission.current) void retryPendingSubmission();
-            else if (gameId && item) void loadItem(gameId, item.position);
-            else void startGame();
-          }}
-        >
-          Reintenta
-        </button>
-      </main>
+      <RetryScreen
+        error={error}
+        onRetry={() => {
+          setError(null);
+          if (pendingSubmission.current) void retryPendingSubmission();
+          else if (gameId && item) void loadItem(gameId, item.position);
+          else void startGame();
+        }}
+      />
     );
   }
 
   if (!item || phase === "loading") {
-    return (
-      <main className="game-intro center">
-        <p className="loading muted" aria-live="polite">
-          Carregant
-          <span />
-          <span />
-          <span />
-        </p>
-      </main>
-    );
+    return <LoadingScreen />;
   }
 
   const zone = sliderValue < mid ? "zone-no" : sliderValue === mid ? "zone-mid" : "zone-yes";
@@ -301,8 +257,9 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
   const total = String(item.totalItems).padStart(3, "0");
 
   const readout =
-    SLIDER_LIKERT_LABELS[sliderValue] ??
-    `${Math.round((sliderValue / (steps - 1)) * 100)}%`;
+    steps === SLIDER_LIKERT_LABELS.length
+      ? (SLIDER_LIKERT_LABELS[sliderValue] ?? `${Math.round((sliderValue / (steps - 1)) * 100)}%`)
+      : `${Math.round((sliderValue / (steps - 1)) * 100)}%`;
 
   return (
     <main className="game">
@@ -316,22 +273,7 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
 
         {/* Progrés: la senyera s'omple fins a l'ítem en curs; la retícula
             de sobre marca cada desena part del recorregut. */}
-        <div
-          className="ticks"
-          role="progressbar"
-          aria-label="Progrés de la partida"
-          aria-valuemin={1}
-          aria-valuemax={item.totalItems}
-          aria-valuenow={item.position}
-          aria-valuetext={`${item.position} de ${item.totalItems}`}
-        >
-          <div
-            className="ticks-flag"
-            aria-hidden="true"
-            style={{ width: `${((item.position - 1) / item.totalItems) * 100}%` }}
-          />
-          <div className="ticks-grid" aria-hidden="true" />
-        </div>
+        <ProgressTicks position={item.position} totalItems={item.totalItems} />
       </div>
 
       <div className="stimulus-wrap">
@@ -343,22 +285,19 @@ export default function GameClient({ openGame, buttonLabels }: GameClientProps) 
       <div className="dock">
         {format === "buttons" ? (
           <div className="answers">
-            {buttonLabels.map((label, idx) => {
-              const confidences = [0.05, 0.25, 0.5, 0.75, 0.95];
-              return (
-                <button
-                  key={idx}
-                  className={idx === 2 ? "btn secondary" : "btn"}
-                  disabled={phase === "submitting"}
-                  onClick={() => {
-                    registerFirstInput();
-                    void submit(confidences[idx]);
-                  }}
-                >
-                  {label}
-                </button>
-              );
-            })}
+            {BUTTON_LABELS.map((label, idx) => (
+              <button
+                key={label}
+                className={idx === 2 ? "btn secondary" : "btn"}
+                disabled={phase === "submitting"}
+                onClick={() => {
+                  registerFirstInput();
+                  void submit(BUTTON_CONFIDENCE[idx]);
+                }}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         ) : (
           <div className="scale">

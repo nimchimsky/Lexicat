@@ -14,20 +14,6 @@ export function logistic(x: number): number {
 const LN_SQRT_PI = 0.5 * Math.log(Math.PI);
 const INV_SQRT_2PI = 1 / Math.sqrt(2 * Math.PI);
 
-/** Sèrie de Taylor de erf(x), x ≥ 0, |x| petit-mig. */
-function erfSeries(x: number): number {
-  const x2 = x * x;
-  let term = x;
-  let sum = x;
-  for (let n = 1; n <= 200; n++) {
-    term *= (-x2) / n;
-    const add = term / (2 * n + 1);
-    sum += add;
-    if (Math.abs(add) <= 1e-17 * Math.abs(sum)) break;
-  }
-  return (2 / Math.sqrt(Math.PI)) * sum;
-}
-
 /** Q(1/2, y) per fracció contínua (Numerical Recipes gcf), y ≥ ~1.5. */
 function qHalfContinuedFraction(y: number): number {
   const FPMIN = 1e-300;

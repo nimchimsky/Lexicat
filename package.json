@@ -12,11 +12,13 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:ingest": "tsx scripts/ingest-item-bank.ts",
+    "db:lemmas": "tsx scripts/load-lemma-map.ts",
     "db:setup": "tsx scripts/migrate.ts && tsx scripts/ingest-item-bank.ts",
     "simulate": "tsx scripts/simulate.ts",
-    "test": "vitest run tests/psychometrics.test.ts tests/mapa.test.ts tests/killian.test.ts --configLoader native",
+    "test": "vitest run tests/psychometrics.test.ts tests/mapa.test.ts tests/killian.test.ts tests/graded.test.ts --configLoader native",
     "test:integration": "vitest run tests/integration.acceptance.test.ts --configLoader native"
   },
   "dependencies": {
@@ -32,6 +34,8 @@
     "@types/react": "^19.1.9",
     "@types/react-dom": "^19.1.7",
     "embedded-postgres": "^17.10.0-beta.17",
+    "eslint": "^9.33.0",
+    "eslint-config-next": "^15.4.5",
     "tsx": "^4.20.3",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"

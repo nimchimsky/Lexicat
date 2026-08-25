@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import { currentPlayer } from "@/lib/server/auth";
 import { getProfileView, type ProfileModeStats, type ProfileRecentGame } from "@/lib/server/views";
 import AccountActions from "@/components/AccountActions";
@@ -7,6 +8,11 @@ import NicknameForm from "@/components/NicknameForm";
 import ProfileForm from "@/components/ProfileForm";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "El meu perfil",
+  robots: { index: false, follow: false },
+};
 
 const dateFormatter = new Intl.DateTimeFormat("ca-ES", { dateStyle: "medium" });
 
@@ -140,7 +146,16 @@ export default async function Compte({
                   <tr key={game.gameId}>
                     <td>{game.status === "completed" ? <Link href={`/resultats/${game.gameId}`}>{date(game.startedAt)}</Link> : date(game.startedAt)}</td>
                     <td>{game.mode === "pompeu" ? "Pompeu" : "Kilian"}</td>
-                    <td>{gameStatus(game)}</td>
+                    <td>
+                      {game.status === "in_progress" ? (
+                        // Reprendre és un clic: /joc i /killian ja fan el resume.
+                        <Link href={game.mode === "pompeu" ? "/joc" : "/killian"} className="resume-link">
+                          En curs · continua
+                        </Link>
+                      ) : (
+                        gameStatus(game)
+                      )}
+                    </td>
                     <td className="num value">{gameResult(game)}</td>
                   </tr>
                 ))}
@@ -167,7 +182,7 @@ export default async function Compte({
           <ul className="wordlist profile-wordlist">
             {view.seenItems.map((item) => (
               <li key={item.itemId}>
-                {item.isWord ? <a className="word" href={`https://dlc.iec.cat/results.asp?txtentrada=${encodeURIComponent(item.form)}`} target="_blank" rel="noreferrer">{item.form}</a> : <span className="word">{item.form}</span>}
+                {item.isWord ? <a className="word" href={`https://dlc.iec.cat/results.asp?txtentrada=${encodeURIComponent(item.form)}`} target="_blank" rel="noopener noreferrer">{item.form}</a> : <span className="word">{item.form}</span>}
                 <span className="muted small">{item.timesSeen === 1 ? "1 vegada" : `${item.timesSeen} vegades`}</span>
               </li>
             ))}

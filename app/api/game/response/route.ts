@@ -1,20 +1,27 @@
 import { NextResponse } from "next/server";
 import { requirePlayer } from "@/lib/server/auth";
-import { HttpError } from "@/lib/server/http";
 import { submitResponse } from "@/lib/server/game";
 import { deviceClassFromUserAgent } from "@/lib/server/device";
+import { apiErrorResponse, invalidBody } from "@/lib/server/apiError";
+import { rateLimit, clientIp } from "@/lib/server/ratelimit";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
-  let player;
-  try {
-    player = await requirePlayer();
-  } catch {
-    return NextResponse.json({ error: "Sessió requerida" }, { status: 401 });
+  // 100 respostes per partida i marge de sobra: cap humà no arriba mai.
+  if (!rateLimit(`resp:${clientIp(req)}`, 3000, 60 * 60 * 1000)) {
+    return NextResponse.json({ error: "Massa peticions" }, { status: 429 });
   }
   try {
-    const body = await req.json();
+    const player = await requirePlayer();
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json();
+    } catch {
+      return invalidBody("JSON invàlid");
+    }
+    if (!body || typeof body !== "object") return invalidBody();
+
     // El mode el decideix la partida al servidor; Pompeu exigeix confiança i
     // Kilian un judici binari amb temps.
     const result = await submitResponse(
@@ -40,9 +47,6 @@ export async function POST(req: Request) {
     );
     return NextResponse.json(result);
   } catch (e) {
-    if (e instanceof HttpError) return NextResponse.json({ error: e.message }, { status: e.status });
-    if (e instanceof SyntaxError) return NextResponse.json({ error: "JSON invàlid" }, { status: 400 });
-    console.error(e);
-    return NextResponse.json({ error: "Error intern" }, { status: 500 });
+    return apiErrorResponse(e);
   }
 }

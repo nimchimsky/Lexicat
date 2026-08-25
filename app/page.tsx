@@ -7,6 +7,28 @@ import GuestButton from "@/components/GuestButton";
 
 export const dynamic = "force-dynamic";
 
+/** Dades estructurades per als cercadors (la portada és la peça indexable). */
+function JsonLd() {
+  const data = {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    name: "Lexicat",
+    url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://lexic.cat",
+    applicationCategory: "GameApplication",
+    inLanguage: "ca",
+    description:
+      "Mesura el teu lèxic en català: 100 estímuls, cap feedback, la teva estimació al final.",
+    offers: { "@type": "Offer", price: "0", priceCurrency: "EUR" },
+  };
+  return (
+    <script
+      type="application/ld+json"
+      // Contingut constant del servidor: cap entrada d'usuari dins.
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
+    />
+  );
+}
+
 function fmt(x: number, digits = 1): string {
   return x.toLocaleString("ca-ES", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 }
@@ -24,6 +46,7 @@ export default async function Home() {
 
   return (
     <main className="home">
+      <JsonLd />
       {/* El mapa viu darrere del contingut: decoratiu, sense res d'interacció.
           Només en pantalles amples (al mòbil no es percep i s'estalvia ~425 KB). */}
       <MapaBackdrop claimedIds={mapa?.claimedIds ?? []} />

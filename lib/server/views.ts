@@ -417,13 +417,6 @@ export async function getKilianRankings(
   }));
 }
 
-export interface KilianRankingRow {
-  nickname: string | null;
-  score: number;
-  bestStreak: number;
-  maxMultiplier: number;
-}
-
 /** Tauler general (player_standings): una fila per jugador de naixement. */
 async function standingBoard(
   playerId: string | null,
@@ -470,8 +463,18 @@ export async function getRankings(playerId?: string | null) {
   return { individualHits, individualLexicon, generalHits, generalLexicon };
 }
 
-export async function getPlayerSummary(playerId: string) {
-  const counts = await query<{ total: string; completed: string }>(
+/** Hi ha alguna partida completada d'aquest mode? (per al tutorial de Kilian) */
+export async function hasCompletedGames(playerId: string, mode: "pompeu" | "killian" = "killian"): Promise<boolean> {
+  const res = await query<{ n: string }>(
+    `SELECT 1 AS n FROM games
+     WHERE player_id = $1 AND mode = $2 AND status = 'completed'
+     LIMIT 1`,
+    [playerId, mode]
+  );
+  return res.rowCount !== 0;
+}
+
+export async function getPlayerSummary(playerId: string) {  const counts = await query<{ total: string; completed: string }>(
     `SELECT COUNT(*) AS total,
             COUNT(*) FILTER (WHERE status = 'completed') AS completed
      FROM games WHERE player_id = $1`,
@@ -674,5 +677,46 @@ export async function getProfileView(
       score: r.score === null ? null : Number(r.score),
       bestStreak: r.best_streak === null ? null : Number(r.best_streak),
     })),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Embut de retenció (mètrica agregada, sense cap dada per persona)
+//
+// Tot es deriva de taules que ja existeixen: mai es registra res nou per
+// mesurar l'embut (privadesa per disseny). Serveix per saber quantes
+// partides s'arrenquen, quants jugadors arriben al primer ítem i quants
+// acaben — el mínim per detectar una pèrdua grossa al principi del flux.
+// ---------------------------------------------------------------------------
+
+export interface Funnel {
+  windowHours: number;
+  gamesStarted: number;
+  gamesWithFirstResponse: number;
+  gamesCompleted: number;
+}
+
+export async function getFunnel(windowHours = 24 * 30): Promise<Funnel> {
+  const res = await query<{
+    started: string;
+    with_first: string;
+    completed: string;
+  }>(
+    `SELECT
+       COUNT(*)::text AS started,
+       COUNT(*) FILTER (
+         WHERE EXISTS (SELECT 1 FROM responses r WHERE r.game_id = g.id)
+       )::text AS with_first,
+       COUNT(*) FILTER (WHERE g.status = 'completed')::text AS completed
+     FROM games g
+     WHERE g.started_at > now() - make_interval(hours => $1)`,
+    [windowHours]
+  );
+  const r = res.rows[0];
+  return {
+    windowHours,
+    gamesStarted: Number(r.started),
+    gamesWithFirstResponse: Number(r.with_first),
+    gamesCompleted: Number(r.completed),
   };
 }

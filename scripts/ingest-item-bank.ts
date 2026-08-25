@@ -66,6 +66,26 @@ export async function runIngest(): Promise<void> {
   try {
     await client.query("BEGIN");
 
+    // Guarda de reproduïbilitat: la versió del banc és el que donen per bo
+    // les partides ja jugades (les quatre versions queden desades a cada
+    // resposta). Re-ingestir un CSV DIFERENT sota la MATEIXA versió
+    // reescriuria el calibratge en silenci i trencaria la promesa de les
+    // versions. Si el CSV ha canviat de debò, bumpa VERSIONS.itemBank.
+    const existing = await client.query<{ source_csv_sha256: string }>(
+      `SELECT source_csv_sha256 FROM item_bank_versions WHERE version = $1`,
+      [VERSIONS.itemBank]
+    );
+    if (
+      existing.rowCount !== 0 &&
+      existing.rows[0].source_csv_sha256 !== sha256 &&
+      process.env.ALLOW_ITEM_BANK_OVERWRITE !== "1"
+    ) {
+      throw new Error(
+        `El banc ${VERSIONS.itemBank} ja existeix amb un CSV diferent (sha256 ${existing.rows[0].source_csv_sha256.slice(0, 12)}… ≠ ${sha256.slice(0, 12)}…). ` +
+          `Bumpa VERSIONS.itemBank a lib/config.ts, o fes ALLOW_ITEM_BANK_OVERWRITE=1 si de veritat vols sobreescriure'l.`
+      );
+    }
+
     await client.query(
       `INSERT INTO item_bank_versions
          (version, source_csv_sha256, n_words, n_pseudowords, n_word_strata, n_pseudo_strata, b_min, b_max)

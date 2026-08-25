@@ -2,24 +2,42 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { responseErrorMessage } from "@/lib/client/api";
 
 export default function AccountActions() {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function doLogout() {
     setBusy(true);
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/");
-    router.refresh();
+    setError(null);
+    try {
+      const res = await fetch("/api/auth/logout", { method: "POST" });
+      if (!res.ok) throw new Error(await responseErrorMessage(res));
+      router.push("/");
+      router.refresh();
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy(false);
+    }
   }
 
   async function doDelete() {
     setBusy(true);
-    await fetch("/api/me", { method: "DELETE" });
-    router.push("/");
-    router.refresh();
+    setError(null);
+    try {
+      const res = await fetch("/api/me", { method: "DELETE" });
+      if (!res.ok) throw new Error(await responseErrorMessage(res));
+      router.push("/");
+      router.refresh();
+    } catch (e) {
+      // Sense això, una caiguda de xarxa deixaria els dos botons morts per
+      // sempre: el compte NO s'ha esborrat i la persona ho ha de saber.
+      setError((e as Error).message);
+      setBusy(false);
+    }
   }
 
   return (
@@ -47,6 +65,12 @@ export default function AccountActions() {
           Esborra el meu compte
         </button>
       )}
+
+      {error ? (
+        <p className="field-error" role="alert">
+          {error}
+        </p>
+      ) : null}
     </>
   );
 }

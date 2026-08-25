@@ -80,8 +80,6 @@ function main() {
     const los: number[] = [];
     const his: number[] = [];
     let hitsSum = 0;
-    let lex1Sum = 0;
-    let lex2Sum = 0;
 
     for (let p = 0; p < players; p++) {
       const rng = mulberry32(0x9e3779b9 ^ (trueTheta * 100003 + p));
@@ -123,10 +121,8 @@ function main() {
       if (!Number.isFinite(sdt.dPrime)) dprimeFinite = false;
       if (sdt.dPrime > maxDprimeObserved) maxDprimeObserved = sdt.dPrime;
 
-      // Rànquing 2 (mètrica lexicó) per al resum i la correlació
-      const result = computeGameResult(responses, itemsById, lexicon, percentiles, { bMin, bMax });
-      lex1Sum += nCorrect;
-      lex2Sum += result.lexiconGameScore;
+      // Rànquing 2 (mètrica lexicó): el resultat s'usa dins spearmanRank1vs2.
+      computeGameResult(responses, itemsById, lexicon, percentiles, { bMin, bMax });
     }
 
     const mean = (xs: number[]) => xs.reduce((s, x) => s + x, 0) / xs.length;

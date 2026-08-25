@@ -11,7 +11,11 @@ import {
   KILIAN_BAR_MS,
   KILIAN_FEEDBACK_HIT_MS,
   KILIAN_FEEDBACK_MISS_MS,
+  KILIAN_YES_CONFIDENCE,
+  KILIAN_NO_CONFIDENCE,
 } from "@/lib/config";
+import { postJson, responseErrorMessage } from "@/lib/client/api";import { Stimulus, LoadingScreen, ProgressTicks } from "@/components/game/Shared";
+import { RetryScreen } from "@/components/game/RetryScreen";
 
 export interface KilianResume {
   gameId: string;
@@ -51,28 +55,13 @@ const PRACTICE: { text: string; isWord: boolean }[] = [
 ];
 
 const SWIPE_THRESHOLD_PX = 48;
+/** Fracció de barra per sota de la qual la barra entra en mode urgent. */
+const BAR_URGENCY_FRACTION = 0.24;
+/** Segons restants que s'anuncien als lectors de pantalla. */
+const ANNOUNCE_SECONDS = 3;
 
 function fmtScore(n: number): string {
   return n.toLocaleString("ca-ES");
-}
-
-/** L'estímul SEMPRE en una sola línia; «l·l» s'envolta d'aire per llegir-se bé. */
-function Stimulus({ text }: { text: string }) {
-  const parts = text.split(/(l·l)/g);
-  if (parts.length === 1) return <>{text}</>;
-  return (
-    <>
-      {parts.map((p, i) =>
-        p === "l·l" ? (
-          <span key={i} className="gemil">
-            {p}
-          </span>
-        ) : (
-          <span key={i}>{p}</span>
-        )
-      )}
-    </>
-  );
 }
 
 export default function KilianClient({ resume, firstTime }: KilianClientProps) {
@@ -97,6 +86,9 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
   const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const barFillRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const barAnnounceRef = useRef<HTMLSpanElement | null>(null);
+  const pausedDialogRef = useRef<HTMLDivElement | null>(null);
+  const lastAnnouncedSecond = useRef<number>(Number.MAX_SAFE_INTEGER);
   /** Fracció de barra restant: permet aturar-la i reprenre-la (pausa). */
   const barRemain = useRef(1);
   const pauseStartedAt = useRef(0);
@@ -109,7 +101,9 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
     id: 0, x: 0, y: 0, active: false,
   });
 
-  const [muted, setMuted] = useState(false);
+  // null = preferència encara no llegida del localStorage: evita que l'etiqueta
+  // parpellegi «so on» → «so off» en muntar.
+  const [muted, setMuted] = useState<boolean | null>(null);
   useEffect(() => {
     try {
       setMuted(localStorage.getItem("kilian-mute") === "1");
@@ -163,10 +157,15 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
   /**
    * La barra corre amb rAF des del moment exacte en què l'estímul apareix.
    * `remainFraction` permet reprenre-la després d'una pausa exactament on era.
+   * Els segons restants finals s'anuncien a una regió viva apart: la barra
+   * visual és aria-hidden i sense això el rellotge seria invisible per a un
+   * lector de pantalla.
    */
   const runBar = useCallback(
     (onExpire: () => void, remainFraction = 1) => {
       stopBar();
+      lastAnnouncedSecond.current = Number.MAX_SAFE_INTEGER;
+      if (barAnnounceRef.current) barAnnounceRef.current.textContent = "";
       const fraction = Math.max(0, Math.min(1, remainFraction));
       const duration = KILIAN_BAR_MS * fraction;
       const start = performance.now();
@@ -180,7 +179,16 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
         barRemain.current = remain;
         if (barFillRef.current) {
           barFillRef.current.style.transform = `scaleX(${remain})`;
-          barFillRef.current.classList.toggle("urgent", remain < 0.24);
+          barFillRef.current.classList.toggle("urgent", remain < BAR_URGENCY_FRACTION);
+        }
+        // Anunci del compte enrere final (només canvis de segon sencers).
+        const secondsLeft = Math.ceil((remain * KILIAN_BAR_MS) / 1000);
+        if (secondsLeft <= ANNOUNCE_SECONDS && secondsLeft < lastAnnouncedSecond.current) {
+          lastAnnouncedSecond.current = secondsLeft;
+          if (barAnnounceRef.current) {
+            barAnnounceRef.current.textContent =
+              secondsLeft <= 0 ? "temps esgotat" : `${secondsLeft}`;
+          }
         }
         if (remain <= 0) {
           rafRef.current = 0;
@@ -202,8 +210,7 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
       cache: "no-store",
     });
     if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.error ?? `HTTP ${res.status}`);
+      throw new Error(await responseErrorMessage(res));
     }
     const data: ItemPayload = await res.json();
     cache.current.set(position, data);
@@ -258,6 +265,48 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
   );
 
   // ------------------------------------------------------------------ enviament
+
+  /** Què torna el servidor en registrar una resposta (el camp outcome només
+   *  ve al mode Kilian). */
+  interface ResponseData {
+    duplicate?: boolean;
+    finished?: boolean;
+    outcome?: KilianOutcome;
+  }
+
+  /**
+   * ÚNICA via de tractament d'una resposta registrada, per a l'enviament
+   * normal i per al reintento: duplicate → sincronitza i avança; finished →
+   * a resultats; altrament feedback + prefetch + avanç. Abans hi havia dues
+   * còpies que ja havien divergit (la del reintento perdria el prefetch).
+   */
+  function handleResponseData(data: ResponseData, nextPosition: number) {
+    if (!gameId) return;
+    pending.current = null;
+    if (data.duplicate) {
+      // La resposta ja era registrada (el primer enviament va commitar però
+      // la resposta es va perdre): sincronitza amb el servidor i avança.
+      void recoverDuplicate();
+      return;
+    }
+    if (data.finished) {
+      router.push(`/resultats/${gameId}`);
+      return;
+    }
+    const oc: KilianOutcome | undefined = data.outcome;
+    if (!oc) throw new Error("Resposta sense resultat");
+    applyOutcome(oc);
+    // El prefetch aprofita la finestra de feedback.
+    prefetchNext(gameId, nextPosition);
+    advanceTimer.current = setTimeout(() => {
+      void advanceTo(nextPosition);
+    }, oc.isCorrect ? KILIAN_FEEDBACK_HIT_MS : KILIAN_FEEDBACK_MISS_MS);
+  }
+  // Referència sempre fresca: send està memoitzat, però cap camí d'invocació
+  // (respondRef, retry) no ha de veure una versió vella del tractament.
+  const responseDataRef = useRef<(data: ResponseData, nextPosition: number) => void>(() => {});
+  responseDataRef.current = handleResponseData;
+
   const send = useCallback(
     async (choice: "yes" | "no" | null, method: "swipe" | "button" | "key" | null) => {
       if (!gameId || !item || submitLock.current) return;
@@ -272,7 +321,7 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
         responseId: responseId.current,
         gameId,
         position: item.position,
-        confidence: choice === "yes" ? 0.95 : choice === "no" ? 0.05 : 0.5,
+        confidence: choice === "yes" ? KILIAN_YES_CONFIDENCE : choice === "no" ? KILIAN_NO_CONFIDENCE : 0.5,
         timeToFirstInputMs: null,
         responseTimeMs: choice === null ? null : elapsed,
         nAdjustments: null,
@@ -284,43 +333,14 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
       pending.current = { body, nextPosition: item.position + 1 };
 
       try {
-        const res = await fetch("/api/game/response", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error ?? `HTTP ${res.status}`);
-        }
-        const data = await res.json();
-        pending.current = null;
-        if (data.duplicate) {
-          // La resposta ja era registrada (el primer enviament va commitar però
-          // la resposta es va perdre): sincronitza amb el servidor i avança.
-          await recoverDuplicate();
-          return;
-        }
-        if (data.finished) {
-          router.push(`/resultats/${gameId}`);
-          return;
-        }
-        const oc: KilianOutcome | undefined = data.outcome;
-        if (!oc) throw new Error("Resposta sense resultat");
-        applyOutcome(oc);
-        // El prefetch aprofita la finestra de feedback.
-        prefetchNext(gameId, item.position + 1);
-        const wait = oc.isCorrect ? KILIAN_FEEDBACK_HIT_MS : KILIAN_FEEDBACK_MISS_MS;
-        advanceTimer.current = setTimeout(() => {
-          void advanceTo(item.position + 1);
-        }, wait);
+        const data = await postJson<ResponseData>("/api/game/response", body);
+        responseDataRef.current(data, item.position + 1);
       } catch (e) {
         setError((e as Error).message);
         setPhase("retry");
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [gameId, item, stopBar, prefetchNext, advanceTo]
+    [gameId, item, stopBar]
   );
 
   /**
@@ -395,16 +415,7 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
     setPhase("loading");
     setError(null);
     try {
-      const res = await fetch("/api/game/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "killian" }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? "No s'ha pogut començar");
-      }
-      const data = await res.json();
+      const data = await postJson<{ gameId: string }>("/api/game/start", { mode: "killian" });
       setGameId(data.gameId);
       setScore(0);
       setStreak(0);
@@ -432,11 +443,67 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
       if (phase !== "playing" && phase !== "practice") return;
       const dir = e.key === "ArrowRight" ? "yes" : e.key === "ArrowLeft" ? "no" : null;
       if (!dir) return;
+      e.preventDefault(); // les fletxes responen sempre: mai scroll lateral
       if (phase === "practice") practiceRespondRef.current(dir);
       else respondRef.current(dir, "key");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, [phase]);
+
+  // ------------------------------------------------------------------ pestanya amagada
+  // La barra mesura temps de paret: amb la pestanya en segon pla el rAF
+  // s'atura però el rellotge no, i en tornar la partida hauria expirat de
+  // cop. Pausa automàtica en amagar-se: en continuar, la barra reprèn on era.
+  useEffect(() => {
+    if (phase !== "playing") return;
+    const onVisibility = () => {
+      if (document.hidden) pauseGame();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
+
+  // ------------------------------------------------------------------ diàleg de pausa
+  // Modal de debò: focus atrapat dins el diàleg, Escape continua i el focus
+  // torna on era en tancar-lo.
+  useEffect(() => {
+    if (phase !== "paused") return;
+    const dialog = pausedDialogRef.current;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const focusables = (): HTMLElement[] =>
+      dialog
+        ? Array.from(
+            dialog.querySelectorAll<HTMLElement>("button, [href], input, [tabindex]:not([tabindex='-1'])")
+          )
+        : [];
+    focusables()[0]?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        resumeGame();
+        return;
+      }
+      if (e.key !== "Tab" || !dialog) return;
+      const items = focusables();
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      previouslyFocused?.focus?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
   // ------------------------------------------------------------------ neteja
@@ -560,75 +627,35 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
 
   if (phase === "retry") {
     return (
-      <main className="game-intro">
-        <p className="eyebrow">Connexió</p>
-        <h1>S&apos;ha perdut el fil.</h1>
-        <p className="lead">{error}</p>
-        <p className="muted small">
-          Tot queda desat al servidor: es reprèn exactament on era.
-        </p>
-        <button
-          className="btn"
-          onClick={() => {
-            setError(null);
-            const p = pending.current;
-            if (p) {
-              // Reenviament segur: mateix response_id, servidor idempotent.
-              setPhase("feedback");
-              void fetch("/api/game/response", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(p.body),
+      <RetryScreen
+        error={error}
+        resumeNote="Tot queda desat al servidor: es reprèn exactament on era."
+        onRetry={() => {
+          setError(null);
+          const p = pending.current;
+          if (p) {
+            // Reenviament segur: mateix response_id, servidor idempotent.
+            setPhase("feedback");
+            postJson<ResponseData>("/api/game/response", p.body)
+              .then((data) => {
+                responseDataRef.current(data, p.nextPosition);
               })
-                .then((r) => {
-                  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-                  return r.json();
-                })
-                .then((data) => {
-                  pending.current = null;
-                  if (data.duplicate) {
-                    // Ja era registrada: sincronitza i avança, mai un blocatge.
-                    return recoverDuplicate();
-                  }
-                  if (data.finished) {
-                    router.push(`/resultats/${gameId}`);
-                    return;
-                  }
-                  const oc: KilianOutcome | undefined = data.outcome;
-                  if (!oc) throw new Error("Resposta sense resultat");
-                  applyOutcome(oc);
-                  advanceTimer.current = setTimeout(() => {
-                    void advanceTo(p.nextPosition);
-                  }, oc.isCorrect ? KILIAN_FEEDBACK_HIT_MS : KILIAN_FEEDBACK_MISS_MS);
-                })
-                .catch((err) => {
-                  setError((err as Error).message);
-                  setPhase("retry");
-                });
-            } else if (gameId && item) {
-              void advanceTo(item.position);
-            } else {
-              void startGame();
-            }
-          }}
-        >
-          Reintenta
-        </button>
-      </main>
+              .catch((err) => {
+                setError((err as Error).message);
+                setPhase("retry");
+              });
+          } else if (gameId && item) {
+            void advanceTo(item.position);
+          } else {
+            void startGame();
+          }
+        }}
+      />
     );
   }
 
   if (!item && phase !== "practice") {
-    return (
-      <main className="game-intro center">
-        <p className="loading muted" aria-live="polite">
-          Carregant
-          <span />
-          <span />
-          <span />
-        </p>
-      </main>
-    );
+    return <LoadingScreen />;
   }
 
   const practicing = phase === "practice";
@@ -669,26 +696,11 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
             onClick={toggleMute}
             aria-label={muted ? "Activa el so" : "Silencia"}
           >
-            {muted ? "so off" : "so on"}
+            {muted === null ? "so" : muted ? "so off" : "so on"}
           </button>
         </div>
 
-        <div
-          className="ticks"
-          role="progressbar"
-          aria-label="Progrés de la partida"
-          aria-valuemin={1}
-          aria-valuemax={current.totalItems}
-          aria-valuenow={current.position}
-          aria-valuetext={`${current.position} de ${current.totalItems}`}
-        >
-          <div
-            className="ticks-flag"
-            aria-hidden="true"
-            style={{ width: `${((current.position - 1) / current.totalItems) * 100}%` }}
-          />
-          <div className="ticks-grid" aria-hidden="true" />
-        </div>
+        <ProgressTicks position={current.position} totalItems={current.totalItems} />
       </div>
 
       {/* Escenari: l'estímul, la seva barra i el feedback gran i centrat
@@ -715,6 +727,10 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
         <div className="kil-timer" aria-hidden="true">
           <div ref={barFillRef} className="kil-bar-fill" />
         </div>
+        {/* Compte enrere per a lectors de pantalla: la barra visual és
+            decorativa (aria-hidden); aquesta regió viva és l'única font de
+            temps. Només parla els últims segons, sense martellejar. */}
+        <span ref={barAnnounceRef} role="status" aria-live="polite" className="visually-hidden" />
         {/* Feedback gran, al mig de l'escenari: es llegueix d'un cop d'ull
             sense baixar la vista cap als botons. */}
         <div
@@ -774,7 +790,13 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
       {/* Pausa: cobreix tota la pantalla (l'estímul queda tapat) i el temps
           no corre: la barra reprèn exactament on era en continuar. */}
       {phase === "paused" ? (
-        <div className="kil-paused" role="dialog" aria-modal="true" aria-label="Partida en pausa">
+        <div
+          ref={pausedDialogRef}
+          className="kil-paused"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Partida en pausa"
+        >
           <p className="eyebrow">Pausa</p>
           <h2>La partida espera.</h2>
           <p className="muted small">

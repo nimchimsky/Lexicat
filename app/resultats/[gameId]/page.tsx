@@ -1,8 +1,10 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { currentPlayer } from "@/lib/server/auth";
 import { getGameResultsView, type GameResultsView, type ResultItemRow } from "@/lib/server/views";
 import { getMapaView } from "@/lib/server/mapa";
+import { ensureGameResults } from "@/lib/server/game";
+import { HttpError } from "@/lib/server/http";
 
 export const dynamic = "force-dynamic";
 
@@ -30,20 +32,28 @@ export default async function Resultats({ params }: { params: Promise<{ gameId: 
 
   let view;
   try {
+    // Reparació a demanda: si el procés va morir entre tancar la partida i
+    // escriure game_results, la primera visita omple el forat (idempotent).
+    await ensureGameResults(gameId);
     view = await getGameResultsView(gameId, player.id);
-  } catch {
-    redirect("/joc");
+  } catch (e) {
+    if (e instanceof HttpError) {
+      // Inexistents o d'un altre jugador → pàgina 404; encara en curs → al joc.
+      if (e.status === 404 || e.status === 403) notFound();
+      if (e.status === 409) redirect("/joc");
+    }
+    throw e; // error d'infraestructura: boundary d'error, mai un silenci
   }
 
-  if (view.mode === "killian") return <KilianResults view={view} />;
-  return <PompeuResults view={view} />;
+  if (view.mode === "killian") return <KilianResults view={view} playerId={player.id} />;
+  return <PompeuResults view={view} playerId={player.id} />;
 }
 
 /* ============================================================
    Mode Pompeu (com sempre: estimació del lexicó i jerarquia §6.5)
    ============================================================ */
 
-function PompeuResults({ view }: { view: GameResultsView }) {
+function PompeuResults({ view, playerId }: { view: GameResultsView; playerId: string }) {
   const s = view.summary;
   const nearCeiling = s.dPrime >= s.dPrimeCeiling - 0.25;
 
@@ -90,7 +100,7 @@ function PompeuResults({ view }: { view: GameResultsView }) {
       </section>
 
       {/* Mapa: fitxes pendents o progrés cap a la propera zona */}
-      <MapaAfterGame />
+      <MapaAfterGame playerId={playerId} />
 
       {/* §7.2 · Les descobertes */}
       <h2>Paraules que has dit que no existeixen</h2>
@@ -225,7 +235,7 @@ function PompeuResults({ view }: { view: GameResultsView }) {
    Mode Kilian: puntuació, ratxes i la partida en un cop d'ull
    ============================================================ */
 
-function KilianResults({ view }: { view: GameResultsView }) {
+function KilianResults({ view, playerId }: { view: GameResultsView; playerId: string }) {
   const k = view.kilian!;
   const s = view.summary;
 
@@ -279,7 +289,7 @@ function KilianResults({ view }: { view: GameResultsView }) {
       </div>
 
       {/* El mapa compta igual que a Pompeu: paraules reals vistes */}
-      <MapaAfterGame />
+      <MapaAfterGame playerId={playerId} />
 
       <h2>Paraules que no has reconegut</h2>
       {view.discoveries.length === 0 ? (
@@ -365,10 +375,8 @@ function fmtScoreInt(n: number): string {
   return Math.round(n).toLocaleString("ca-ES");
 }
 
-async function MapaAfterGame() {
-  const player = await currentPlayer();
-  if (!player) return null;
-  const mapa = await getMapaView(player.id);
+async function MapaAfterGame({ playerId }: { playerId: string }) {
+  const mapa = await getMapaView(playerId);
   const zones = mapa.claimedIds.length;
 
   if (mapa.pending > 0) {

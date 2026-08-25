@@ -1,23 +1,25 @@
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import { currentPlayer } from "@/lib/server/auth";
-import { getOpenGame, sweepAbandonedGames } from "@/lib/server/game";
-import { query } from "@/lib/server/db";
+import { getOpenGame } from "@/lib/server/game";
+import { hasCompletedGames } from "@/lib/server/views";
 import KilianClient, { type KilianResume } from "@/components/KilianClient";
 
 export const dynamic = "force-dynamic";
 
+export const metadata: Metadata = {
+  title: "Mode Kilian",
+  robots: { index: false, follow: false },
+};
+
 export default async function Killian() {
   const player = await currentPlayer();
   if (!player) redirect("/entrar");
-  await sweepAbandonedGames(player.id);
 
   const open = await getOpenGame(player.id);
 
-  const played = await query<{ n: string }>(
-    `SELECT COUNT(*) AS n FROM games
-     WHERE player_id = $1 AND mode = 'killian' AND status = 'completed'`,
-    [player.id]
-  );
+  // Primera vegada al mode: decideix si cal el miniaprenentatge del gest.
+  const firstTime = !(await hasCompletedGames(player.id));
 
   const resume: KilianResume | null =
     open && open.mode === "killian"
@@ -32,7 +34,7 @@ export default async function Killian() {
   return (
     <KilianClient
       resume={resume}
-      firstTime={Number(played.rows[0].n) === 0}
+      firstTime={firstTime}
     />
   );
 }

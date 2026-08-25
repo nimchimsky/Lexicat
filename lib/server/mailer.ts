@@ -13,20 +13,32 @@ export interface SentLink {
   devUrl?: string;
 }
 
+/**
+ * Fallada del servei de correu (configuració que falta o proveïdor caigut).
+ * Tipus propi perquè les rutes la distingeixin d'un error de validació i
+ * responguin 503 sense endevinar pel text del missatge.
+ */
+export class MailServiceError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MailServiceError";
+  }
+}
+
 export async function sendMagicLink(email: string, url: string): Promise<SentLink> {
   const apiKey = process.env.RESEND_API_KEY;
   const isProd = process.env.NODE_ENV === "production";
 
   if (!apiKey) {
     if (isProd) {
-      throw new Error("Servei de correu no configurat: falta RESEND_API_KEY");
+      throw new MailServiceError("Servei de correu no configurat: falta RESEND_API_KEY");
     }
     console.log(`\n[lexicat] Enllaç màgic per a ${email}:\n${url}\n`);
     return { delivered: false, devUrl: url };
   }
 
   if (isProd && !process.env.MAIL_FROM) {
-    throw new Error("Servei de correu incomplet: falta MAIL_FROM");
+    throw new MailServiceError("Servei de correu incomplet: falta MAIL_FROM");
   }
 
   const from = process.env.MAIL_FROM ?? "Lexicat <onboarding@resend.dev>";
@@ -46,7 +58,7 @@ export async function sendMagicLink(email: string, url: string): Promise<SentLin
     });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`Resend ha fallat (${res.status}): ${body.slice(0, 200)}`);
+    throw new MailServiceError(`Resend ha fallat (${res.status}): ${body.slice(0, 200)}`);
   }
   return { delivered: true };
 }

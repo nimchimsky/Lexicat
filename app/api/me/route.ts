@@ -1,42 +1,52 @@
 import { NextResponse } from "next/server";
 import { requirePlayer, setNickname, currentPlayer, deleteAccount } from "@/lib/server/auth";
 import { getPlayerSummary } from "@/lib/server/views";
+import { apiErrorResponse, invalidBody } from "@/lib/server/apiError";
 
 export const runtime = "nodejs";
 
+// El 401 de sessió ve d'un HttpError llançat per requirePlayer/currentPlayer
+// i surt pel mateix mapa central: una caiguda de DB no es presenta mai com a
+// «sessió requerida».
+
 export async function GET() {
-  const player = await currentPlayer();
-  if (!player) return NextResponse.json({ player: null }, { status: 200 });
-  const summary = await getPlayerSummary(player.id);
-  return NextResponse.json({
-    player: { email: player.email, nickname: player.nickname },
-    ...summary,
-  });
+  try {
+    const player = await currentPlayer();
+    if (!player) return NextResponse.json({ player: null }, { status: 200 });
+    const summary = await getPlayerSummary(player.id);
+    return NextResponse.json({
+      player: { email: player.email, nickname: player.nickname },
+      ...summary,
+    });
+  } catch (e) {
+    return apiErrorResponse(e);
+  }
 }
 
 export async function POST(req: Request) {
-  let player;
   try {
-    player = await requirePlayer();
-  } catch {
-    return NextResponse.json({ error: "Sessió requerida" }, { status: 401 });
-  }
-  try {
-    const { nickname } = await req.json();
-    await setNickname(player.id, String(nickname ?? ""));
+    const player = await requirePlayer();
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json();
+    } catch {
+      return invalidBody("Cos invàlid");
+    }
+    const nickname = (body as { nickname?: unknown }).nickname;
+    if (typeof nickname !== "string") return invalidBody("Cal un sobrenom");
+    await setNickname(player.id, nickname);
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+    return apiErrorResponse(e);
   }
 }
 
 export async function DELETE() {
-  let player;
   try {
-    player = await requirePlayer();
-  } catch {
-    return NextResponse.json({ error: "Sessió requerida" }, { status: 401 });
+    const player = await requirePlayer();
+    await deleteAccount(player.id);
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return apiErrorResponse(e);
   }
-  await deleteAccount(player.id);
-  return NextResponse.json({ ok: true });
 }

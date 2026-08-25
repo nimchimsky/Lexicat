@@ -2,18 +2,20 @@ import { NextResponse } from "next/server";
 import { requirePlayer } from "@/lib/server/auth";
 import { startGame } from "@/lib/server/game";
 import { deviceClassFromUserAgent } from "@/lib/server/device";
+import { apiErrorResponse } from "@/lib/server/apiError";
+import { rateLimit, clientIp } from "@/lib/server/ratelimit";
 import type { GameMode } from "@/lib/config";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
-  let player;
-  try {
-    player = await requirePlayer();
-  } catch {
-    return NextResponse.json({ error: "Sessió requerida" }, { status: 401 });
+  // Crear partida és carregant (selecció sencera en transacció): limitat per
+  // IP per damunt del ritme de qualsevol jugador humà.
+  if (!rateLimit(`start:${clientIp(req)}`, 60, 60 * 60 * 1000)) {
+    return NextResponse.json({ error: "Massa partides. Descansa un moment." }, { status: 429 });
   }
   try {
+    const player = await requirePlayer();
     const body = await req.json().catch(() => ({}));
     const mode: GameMode = body?.mode === "killian" ? "killian" : "pompeu";
     const game = await startGame(
@@ -23,7 +25,6 @@ export async function POST(req: Request) {
     );
     return NextResponse.json(game);
   } catch (e) {
-    console.error(e);
-    return NextResponse.json({ error: "No s'ha pogut crear la partida" }, { status: 500 });
+    return apiErrorResponse(e);
   }
 }

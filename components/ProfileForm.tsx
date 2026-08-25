@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { PlayerProfile } from "@/lib/server/profile";
+import { responseErrorMessage } from "@/lib/client/api";
 
 const GENDER_LABELS: Record<string, string> = {
   dona: "Dona",
@@ -44,8 +45,8 @@ export default function ProfileForm({ initialProfile }: { initialProfile: Player
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(profile),
       });
+      if (!res.ok) throw new Error(await responseErrorMessage(res));
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "No s’ha pogut desar el perfil");
       setProfile(data.profile);
       setMessage("Perfil desat.");
       router.refresh();

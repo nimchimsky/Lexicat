@@ -38,8 +38,10 @@ async function main() {
     console.log(`  exposicions totals: ${exp.rows[0].times_seen}`);
   }
 
+  // L'escriptor de selection_log (startGame) registra 'relaxations': si
+  // canvies el nom d'un costat, canvia'l a l'altre.
   const relaxed = await c.query<{ n: string }>(
-    `SELECT COUNT(*)::text AS n FROM selection_log WHERE event = 'relaxed_cooldown'`
+    `SELECT COUNT(*)::text AS n FROM selection_log WHERE event = 'relaxations'`
   );
   console.log(`\nRelaxacions de refredament registrades: ${relaxed.rows[0].n}`);
 

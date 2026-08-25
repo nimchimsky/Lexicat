@@ -14,7 +14,7 @@ import {
 } from "../psychometrics/scoring";
 import { SCORE_K, SCORING_EPSILON } from "../config";
 
-export interface ScoredResponse extends GraduatedResponse {}
+export type ScoredResponse = GraduatedResponse;
 
 export interface ComputedGameResult {
   nResponses: number;

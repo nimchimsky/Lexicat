@@ -243,3 +243,89 @@ Mode arcade binari amb rellotge, decisions del Roger del mateix dia.
   punts que toquen són els de la fracció de barra visible restant.
 - **Botó «Juga» de Kilian groc** com el de Pompeu: mateixa crida a l'acció
   als dos modes de la portada.
+
+## 14. Passada d'integritat, robustesa i UX (25/08/2026)
+
+Revisió sistemàtica del projecte (bug fixes, seguretat, accessibilitat,
+rendiment i producte). El que canvia decisions de fons:
+
+- **El resultat Pompeu es calcula FORA de la transacció** de la darrera
+  resposta: el MAP + lexicó + finestra poden trigar i mai han de tenir la
+  partida bloquejada. La partida es tanca dins (status + flag de qualitat),
+  i `finalizePompeuGame` corre després del COMMIT; si el procés mor a mig
+  camí, `ensureGameResults` repara el forat a demanda des de /resultats.
+  Idempotent per construcció (`ON CONFLICT DO NOTHING`). Kilian tanca igual
+  que sempre (SQL agregat, barat).
+- **Manteniment programat:** la poda de partides abandonades surt del camí
+  calent (cada visita a /joc) i passa al cron `/api/cron/sweep`
+  (`vercel.json`, horària; `CRON_SECRET` com a Bearer), que també poda
+  sessions/tokens caducats (migració 0008: fora `sessions.last_seen_at`,
+  índexs d'expiració).
+- **L'enllaç màgic no canvia estat per GET:** el correu porta a
+  `/entrar/verificar`, on el botó fa POST a `/api/auth/verify`. Un preview
+  del correu no pot cremar el token. A més, `redeemMagicToken`,
+  `createGuestSession` i `deleteAccount` són transaccionals: o passen del
+  tot o no passen.
+- **Rate limiting ampliat** (`start`, `response`, `state`, `mapa/claim`) amb
+  poda de buckets i IP presa de capçaleres només de confiança (`x-real-ip`,
+  o l'ÚLTIM salt de `x-forwarded-for`; mai el primer, suplantables).
+- **Errors API uniformes** (`lib/server/apiError.ts`): els HttpError porten
+  el seu missatge; qualsevol altra cosa es registra i respon genèric — cap
+  missatge tècnic no arriba al client.
+- **Guarda de reproduïbilitat a la ingesta:** re-ingestir un CSV diferent
+  sota el mateix `itemBank` avorta (cal bumpar versió o forçar amb
+  `ALLOW_ITEM_BANK_OVERWRITE=1`): les versions congelades no es reescriuen
+  en silenci.
+- **Model graduat dormant:** `lib/psychometrics/graded.ts` implementa
+  `graded_2pl_map` (Samejima adaptat, criteri de persona c estimat amb θ;
+  confiança recodificada en direcció de correcció, graella única de 11
+  categories). Darrere de la interfície `estimateAbility`; activar-lo
+  exigirà bumpar `calibration_version`. Validat amb recuperació sobre
+  generació pròpia a `tests/graded.test.ts`.
+- **Embut agregat sense tracking nou:** `/api/metrics/funnel` deriva
+  iniciat → primer ítem → completat de les taules que ja existeixen
+  (`ADMIN_TOKEN`; sense token, 404).
+- **Client:** components compartits Pompeu/Kilian (estímul, progrés,
+  carregant, pantalla de reintento amb detecció offline), auto-pausa de
+  Kilian en amagar la pestanya (la barra mesura temps de paret), compte
+  enrere anunciat a lectors de pantalla, diàleg de pausa modal de debò,
+  constants centralitzades (cap literal de confiances ni «100»/«66»/«7»
+  repetit).
+- **PWA i descobriment:** manifest, icona, metadata OG/Twitter amb template,
+  robots i sitemap, JSON-LD a la portada; `error.tsx` / `not-found.tsx` /
+  `loading.tsx` en català.
+- **Pes:** fora Fraunces i JetBrains Mono (temes morts) i ~450 línies de CSS
+  mort; backdrop del mapa en idle; tooltip del mapa per refs (mai un
+  re-render per píxel); estímuls llargs (fins a 12 caràcters) encoixinats.
+- **ESLint adoptat** (`eslint-config-next`, pla): `npm run lint`.
+
+### 14.1 · Correccions de la revisió posterior (25/08/2026)
+
+La revisió sistemàtica del canvi va trobar punts que s'han corregit alhora:
+
+- **Cron diari i falla tancada:** el manteniment passa a `0 3 * * *` (el
+  horari trencava el deploy del pla gratuït de Vercel) i `/api/cron/sweep`
+  respon 401 en producció si falta `CRON_SECRET` — la configuració que falta
+  ha de ser sorollosa, mai una porta oberta.
+- **Finalització atòmica i exclusiva:** `finalizePompeuGame` corre sota lock
+  advisory per partida (`pg_advisory_xact_lock`) dins UNA transacció que hi
+  escriu resultats I finestra plegats; si alguna peça falta (procés mort a
+  mig camí), `ensureGameResults` reparen exactament la que falta. Mai doble
+  càlcul, mai standings oblidats.
+- **Standings mai sobre un compte esborrat:** l'upsert de
+  `player_standings` és condicional a `players.deleted_at IS NULL`, tanmateix
+  en INSERT com en UPDATE: cap carrera amb l'eliminació GDPR no ressuscita
+  dades derivades d'una identitat anonimitzada.
+- **URL del correu màgic:** mai derivada del Host de la petició en
+  producció self-hosted (enverinable); `APP_BASE_URL` mana, a Vercel l'origin
+  és fiable, i sense cap de les dues en producció es nega a enviar.
+- **Rate limit amortitzat:** la poda completa corre com a molt un cop per
+  minut i l'evicció en inserir és O(1); fora el `clear()` en bloc que
+  resetejava límits a tothom.
+- **401 només per sessió:** les rutes ja no atrapen errors de DB com a «Sessió
+  requerida»: tot surt pel mapa central (`apiErrorResponse`) i un error
+  d'infraestructura arriba com a 500 genèric.
+- **Kilian, un sol camí de resposta:** `handleResponseData` únic per a
+  enviament normal i reintento (la còpia del reintento havia perdut el
+  prefetch) i tots els fetch passen pel tractament d'errors compartit.
+- **CSP report-only** i `X-Robots-Tag: noindex` als previews de Vercel.

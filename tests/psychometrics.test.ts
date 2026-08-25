@@ -171,8 +171,8 @@ describe("d′ amb correcció loglineal (criteris 6 i 7)", () => {
     const gameWords = bank.filter((i) => i.isWord).slice(0, 66);
     const gamePseudos = bank.filter((i) => !i.isWord).slice(0, 34);
     const allPerfect = [
-      ...gameWords.map((w) => ({ confidence: 0.95, isWord: true })),
-      ...gamePseudos.map((p) => ({ confidence: 0.05, isWord: false })),
+      ...gameWords.map(() => ({ confidence: 0.95, isWord: true })),
+      ...gamePseudos.map(() => ({ confidence: 0.05, isWord: false })),
     ];
     const sdt = computeSdt(allPerfect);
     expect(Number.isFinite(sdt.dPrime)).toBe(true);

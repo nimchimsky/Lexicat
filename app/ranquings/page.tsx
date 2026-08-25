@@ -1,8 +1,13 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { currentPlayer } from "@/lib/server/auth";
 import { getRankings, getKilianRankings, RANKING_TOP_N, type RankingRow } from "@/lib/server/views";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Rànquings",
+};
 
 function fmt(x: number, digits = 1): string {
   return x.toLocaleString("ca-ES", { minimumFractionDigits: digits, maximumFractionDigits: digits });
@@ -41,6 +46,7 @@ function Board({ rows, unit }: { rows: BoardRow[]; unit: string }) {
         </p>
       ) : null}
       <table className="board">
+        <caption className="visually-hidden">Classificació per {unit}</caption>
         <thead>
           <tr>
             <th className="rank">#</th>

@@ -25,13 +25,18 @@ export default function Chrome({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      {/* Atall de teclat per sobre la navegació (WCAG 2.4.1); visible només
+          quan rep el focus. */}
+      <a href="#contingut" className="skip-link">
+        Salta al contingut
+      </a>
       <header className="topbar">
         <div className="topbar-in">
           <Link href="/" className="topbar-mark">
             <span className="senyera h" aria-hidden="true" />
             <span className="topbar-name">Lexicat</span>
           </Link>
-          <nav className="topbar-nav">
+          <nav className="topbar-nav" aria-label="Navegació principal">
             {NAV.map((n) => (
               <Link
                 key={n.href}
@@ -45,13 +50,14 @@ export default function Chrome({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <div className="shell">{children}</div>
+      <div className="shell" id="contingut">
+        {children}
+      </div>
 
       <footer className="footer">
         <span className="footer-mark">Lexicat · Lèxic català</span>
-        <nav>
+        <nav aria-label="Navegació del peu">
           <Link href="/privadesa">Protecció de dades</Link>
-          <Link href="/ranquings">Rànquings</Link>
         </nav>
       </footer>
     </>

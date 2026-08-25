@@ -32,7 +32,7 @@ export interface PlayerProfile {
   nativeCatalan: boolean | null;
 }
 
-export interface PlayerProfileInput extends PlayerProfile {}
+export type PlayerProfileInput = PlayerProfile;
 
 function nullableText(value: unknown, field: string, maxLength = 120): string | null {
   if (value === null || value === undefined || value === "") return null;

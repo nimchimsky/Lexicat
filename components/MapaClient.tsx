@@ -8,9 +8,11 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import MapaCatala, { type MapaVariant } from "./MapaCatala";
 import { REGIONS, regionInfo, type RegionInfo } from "@/lib/mapa/catalog";
+import { N_WORD_ITEMS } from "@/lib/config";
 import type { MapaView } from "@/lib/server/mapa";
 
-const WORDS_PER_GAME = 66; // paraules reals per partida
+// Paraules reals per partida: ÚNICA font lib/config.ts (N_WORD_ITEMS).
+const WORDS_PER_GAME = N_WORD_ITEMS;
 
 export default function MapaClient({ view }: { view: MapaView }) {
   const [variant, setVariant] = useState<MapaVariant>("compacte");
@@ -197,9 +199,9 @@ export default function MapaClient({ view }: { view: MapaView }) {
 
       <p className="small muted mapa-how">
         Les primeres zones arriben de seguida —la primera, en acabar la primera partida— i després
-        cada ~1% del lèxic (≈408 paraules reals vistes, uns 6–7 partides) desbloqueja la següent.
-        Tu tries quin territori pintes: quan hagis respost tot el lèxic, els Països Catalans sencers
-        seran teus.
+        cada ~1% del lèxic (≈{Math.round(view.zones > 0 ? view.wordsTotal / view.zones : 0).toLocaleString("ca-ES")} paraules
+        reals vistes) desbloqueja la següent. Tu tries quin territori pintes: quan hagis respost tot
+        el lèxic, els Països Catalans sencers seran teus.
       </p>
 
       <div className="actions">

@@ -33,15 +33,15 @@ import {
   type KillianKind,
 } from "../game/kilian";
 
-/** Marca com a abandonades (inactivitat) les partides in_progress molt velles. */
-export async function sweepAbandonedGames(playerId?: string): Promise<void> {
+/** Marca com a abandonades (inactivitat) les partides in_progress molt velles.
+ *  Només el cron de manteniment la crida (vegeu /api/cron/sweep). */
+export async function sweepAbandonedGames(): Promise<void> {
   await query(
     `UPDATE games g
      SET status = 'abandoned', finished_at = now(), abandoned_reason = 'inactivitat',
          abandoned_at_position = COALESCE((SELECT MAX(position_in_game) FROM responses r WHERE r.game_id = g.id), 0)
-     WHERE g.status = 'in_progress' AND g.started_at < now() - make_interval(secs => $1)
-       AND ($2::uuid IS NULL OR g.player_id = $2)`,
-    [ABANDON_AFTER_MS / 1000, playerId ?? null]
+     WHERE g.status = 'in_progress' AND g.started_at < now() - make_interval(secs => $1)`,
+    [ABANDON_AFTER_MS / 1000]
   );
 }
 
@@ -55,8 +55,13 @@ export interface StartedGame {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/** Única definició del format UUID que l'API accepta (rutes i domini). */
+export function isUuid(value: string): boolean {
+  return UUID_RE.test(value);
+}
+
 function assertUuid(value: string, field: string): void {
-  if (!UUID_RE.test(value)) throw new HttpError(400, `${field} invàlid`);
+  if (!isUuid(value)) throw new HttpError(400, `${field} invàlid`);
 }
 
 function finiteNonNegative(value: number | null, field: string): number | null {
@@ -289,7 +294,7 @@ export async function serveItem(
     [playerId, itemIdRow.rows[0].item_id, gameId, g.rows[0].player_game_index]
   );
 
-  return { position, stimulus: item.rows[0].form, totalItems: 100 };
+  return { position, stimulus: item.rows[0].form, totalItems: GAME_LENGTH };
 }
 
 export interface SubmittedResponse {
@@ -497,7 +502,7 @@ export async function submitResponse(
       ]
     );
 
-    let duplicate = ins.rowCount === 0;
+    const duplicate = ins.rowCount === 0;
     if (duplicate) {
       // A concurrent request can win the response_id race after the initial
       // lookup. Never treat a token that belongs to another game as a valid
@@ -518,6 +523,7 @@ export async function submitResponse(
     const total = Number(totalRes.rows[0].n);
     let finished = false;
     let outcome: SubmittedResponse["outcome"] | undefined;
+    let finalizePompeu = false;
     if (!duplicate) {
       if (isKillian) {
         const soFar = await client.query<{ score_so_far: string }>(
@@ -536,12 +542,36 @@ export async function submitResponse(
       }
       if (total === GAME_LENGTH) {
         finished = true;
-        if (isKillian) await finishKillianGameTx(client, input.gameId);
-        else await finishGameTx(client, input.gameId);
+        if (isKillian) {
+          // Kilian tanca amb SQL agregat: barat, es queda dins la transacció.
+          await finishKillianGameTx(client, input.gameId);
+        } else {
+          // Pompeu marca la partida completada DINS de la transacció, però el
+          // càlcul pesat (MAP + lexicó + finestra de rànquings) surt FORA:
+          // no pot tenir el joc sencer bloquejat mentre estima. La fila de
+          // resultats és idempotent i ensureGameResults en repara qualsevol
+          // forat si el procés mor entre mig.
+          await client.query(
+            `UPDATE games SET status = 'completed', finished_at = now() WHERE id = $1`,
+            [input.gameId]
+          );
+          await markPompeuQualityTx(client, input.gameId);
+          finalizePompeu = true;
+        }
       }
     }
 
     await client.query("COMMIT");
+
+    if (finalizePompeu) {
+      try {
+        await finalizePompeuGame(input.gameId);
+      } catch (e) {
+        // La partida ja està tancada; el resultat es repara a demanda des de
+        // /resultats via ensureGameResults.
+        console.error(`[game] finalització diferida fallida per ${input.gameId}`, e);
+      }
+    }
     return { duplicate, finished, outcome };
   } catch (e) {
     await client.query("ROLLBACK");
@@ -551,41 +581,123 @@ export async function submitResponse(
   }
 }
 
-async function finishGameTx(client: import("pg").PoolClient, gameId: string): Promise<void> {
-  // Qualitat de resposta (§9): marca, no esborris.
+/** Qualitat de resposta (§9): marca, no esborris. Dins de la transacció de
+ *  la darrera resposta; el càlcul pesat ve després, fora. */
+async function markPompeuQualityTx(client: import("pg").PoolClient, gameId: string): Promise<void> {
   const fast = await client.query<{ n: string }>(
     `SELECT COUNT(*) AS n FROM responses WHERE game_id = $1 AND rt_below_threshold`,
     [gameId]
   );
-  const fastRatio = Number(fast.rows[0].n) / 100;
+  const fastRatio = Number(fast.rows[0].n) / GAME_LENGTH;
   if (fastRatio >= FAST_GUESS_GAME_RATIO) {
     await client.query(`UPDATE games SET quality_flag = 'suspect_fast' WHERE id = $1`, [gameId]);
   }
+}
 
-  const result = await computeResultForGame(gameId, (sql, params) => client.query(sql, params as never));
+/**
+ * Càlcul de resultats Pompeu FORA de la transacció de la resposta: MAP,
+ * lexicó i finestra dels rànquings poden trigar i mai han de tenir el joc
+ * bloquejat mentre corren.
+ *
+ * Tot passa en UNA transacció pròpia sota un lock advisory per partida:
+ *   · un sol càlcul encara que concorrin la finalització i una reparació
+ *     (mai el doble de CPU ni escriptura duplicada);
+ *   · resultats i standings entren plegats o no entra res — si el procés
+ *     mor a mig camí, ensureGameResults troba l'estat coherent i reparen
+ *     exactament la peça que falta (resultats, o només standings).
+ */
+export async function finalizePompeuGame(gameId: string): Promise<void> {
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [gameId]);
 
-  await client.query(
-    `UPDATE games SET status = 'completed', finished_at = now() WHERE id = $1`,
+    const state = await client.query<{
+      player_id: string;
+      has_results: boolean;
+      standings_fresh: boolean;
+    }>(
+      `SELECT g.player_id,
+              EXISTS (SELECT 1 FROM game_results gr WHERE gr.game_id = g.id) AS has_results,
+              EXISTS (
+                SELECT 1 FROM player_standings ps
+                WHERE ps.player_id = g.player_id
+                  AND ps.last_game_id = (
+                    -- l'última partida completa vàlida del jugador
+                    SELECT g2.id FROM games g2
+                    WHERE g2.player_id = g.player_id AND g2.status = 'completed'
+                      AND g2.quality_flag IS NULL AND g2.mode = 'pompeu'
+                    ORDER BY g2.finished_at DESC LIMIT 1
+                  )
+              ) AS standings_fresh
+       FROM games g WHERE g.id = $1`,
+      [gameId]
+    );
+    if (state.rowCount === 0) throw new HttpError(404, "Partida no trobada");
+    const { player_id: playerId, has_results: hasResults, standings_fresh: standingsFresh } = state.rows[0];
+
+    const q: Querier = (sql, params) => client.query(sql, params);
+
+    if (!hasResults) {
+      const result = await computeResultForGame(gameId, q);
+      await q(
+        `INSERT INTO game_results (game_id, n_responses, theta, se_theta, se_total, pct_lexicon,
+            pct_lo, pct_hi, percentile, d_prime, criterion, n_correct, n_false_alarms,
+            n_fifty_fifty, score, lexicon_game_score, calibration_version, reference_corpus_version, scoring_version)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+         ON CONFLICT (game_id) DO NOTHING`,
+        [
+          gameId, result.nResponses, result.theta, result.seTheta, result.seTotal,
+          result.pctLexicon, result.pctLo, result.pctHi, result.percentile,
+          result.dPrime, result.criterion, result.nCorrect, result.nFalseAlarms,
+          result.nFiftyFifty, result.score, result.lexiconGameScore,
+          VERSIONS.calibration, VERSIONS.referenceCorpus, VERSIONS.scoring,
+        ]
+      );
+      await recomputeStandings(q, playerId);
+    } else if (!standingsFresh) {
+      // Reparació parcial: els resultats hi són però la finestra no reflecteix
+      // l'última partida vàlida. Només aleshores es torna a córrer l'estimació.
+      await recomputeStandings(q, playerId);
+    }
+    // Amb tot al dia: no-op (el camí ràpid d'una reparació redundant).
+
+    await client.query("COMMIT");
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Reparació a demanda: si el procés va morir entre tancar la partida i
+ * escriure resultats/standings, la primera visita a /resultats omple el
+ * forat (el lock advisory de finalizePompeuGame evita doble càlcul).
+ */
+export async function ensureGameResults(gameId: string): Promise<void> {
+  const g = await query<{ status: string; mode: GameMode }>(
+    `SELECT status, mode FROM games WHERE id = $1`,
     [gameId]
   );
-  await client.query(
-    `INSERT INTO game_results (game_id, n_responses, theta, se_theta, se_total, pct_lexicon,
-        pct_lo, pct_hi, percentile, d_prime, criterion, n_correct, n_false_alarms,
-        n_fifty_fifty, score, lexicon_game_score, calibration_version, reference_corpus_version, scoring_version)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
-     ON CONFLICT (game_id) DO NOTHING`,
-    [
-      gameId, result.nResponses, result.theta, result.seTheta, result.seTotal,
-      result.pctLexicon, result.pctLo, result.pctHi, result.percentile,
-      result.dPrime, result.criterion, result.nCorrect, result.nFalseAlarms,
-      result.nFiftyFifty, result.score, result.lexiconGameScore,
-      VERSIONS.calibration, VERSIONS.referenceCorpus, VERSIONS.scoring,
-    ]
-  );
-  const pidRes = await client.query<{ player_id: string }>(
-    `SELECT player_id FROM games WHERE id = $1`, [gameId]
-  );
-  await recomputeStandings(client, pidRes.rows[0].player_id);
+  if (g.rowCount === 0) throw new HttpError(404, "Partida no trobada");
+  if (g.rows[0].status !== "completed") throw new HttpError(409, "La partida encara no s'ha acabat");
+  if (g.rows[0].mode === "pompeu") {
+    await finalizePompeuGame(gameId);
+  } else {
+    const client = await getPool().connect();
+    try {
+      await client.query("BEGIN");
+      await finishKillianGameTx(client, gameId);
+      await client.query("COMMIT");
+    } catch (e) {
+      await client.query("ROLLBACK");
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
 }
 
 /**
@@ -649,7 +761,10 @@ async function finishKillianGameTx(client: import("pg").PoolClient, gameId: stri
   // Cap recomputeStandings: el mode Kilian no entra mai a les taules de Pompeu.
 }
 
-type Querier = (sql: string, params?: unknown[]) => Promise<{ rows: any[]; rowCount: number | null }>;
+type Querier = <T extends import("pg").QueryResultRow = import("pg").QueryResultRow>(
+  sql: string,
+  params?: unknown[]
+) => Promise<{ rows: T[]; rowCount: number | null }>;
 
 export async function computeResultForGame(
   gameId: string,
@@ -681,9 +796,11 @@ function estimatePooled(responses: GraduatedResponse[], items: Map<number, ItemP
 }
 
 /** Recàlcul de la finestra dels rànquings generals (últimes N completes vàlides).
- *  Només modes Pompeu: una partida Kilian mai mou l'estimació del lexicó. */
-async function recomputeStandings(client: import("pg").PoolClient, playerId: string): Promise<void> {
-  const gamesRes = await client.query<{ id: string; n_correct: number; score: number }>(
+ *  Només modes Pompeu: una partida Kilian mai mou l'estimació del lexicó.
+ *  Corre sobre un Querier (client de transacció o pool): s'invoca després
+ *  del COMMIT de l'última resposta i des d'ensureGameResults. */
+async function recomputeStandings(q: Querier, playerId: string): Promise<void> {
+  const gamesRes = await q<{ id: string; n_correct: number; score: number }>(
     `SELECT g.id, gr.n_correct, gr.score
      FROM games g JOIN game_results gr ON gr.game_id = g.id
      WHERE g.player_id = $1 AND g.status = 'completed' AND g.quality_flag IS NULL
@@ -694,7 +811,7 @@ async function recomputeStandings(client: import("pg").PoolClient, playerId: str
   if (gamesRes.rowCount === 0) return;
   const gameIds = gamesRes.rows.map((r) => r.id);
 
-  const respRes = await client.query<{
+  const respRes = await q<{
     item_id: number; confidence: number; is_word: boolean; a: number; b: number;
   }>(
     `SELECT r.item_id, r.confidence, r.is_word, i.a, i.b
@@ -723,17 +840,19 @@ async function recomputeStandings(client: import("pg").PoolClient, playerId: str
   const meanHits = gamesRes.rows.reduce((s, r) => s + Number(r.n_correct), 0) / gamesRes.rows.length;
   const meanScore = gamesRes.rows.reduce((s, r) => s + Number(r.score), 0) / gamesRes.rows.length;
 
-  await client.query(
+  await q(
     `INSERT INTO player_standings (player_id, window_size, n_games, mean_hits, theta_pooled,
         se_theta_pooled, se_total, pct_lexicon, pct_lo, pct_hi, percentile_pooled, mean_score, last_game_id, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now())
+     SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now()
+     WHERE EXISTS (SELECT 1 FROM players WHERE id = $1 AND deleted_at IS NULL)
      ON CONFLICT (player_id) DO UPDATE SET
         window_size = EXCLUDED.window_size, n_games = EXCLUDED.n_games,
         mean_hits = EXCLUDED.mean_hits, theta_pooled = EXCLUDED.theta_pooled,
         se_theta_pooled = EXCLUDED.se_theta_pooled, se_total = EXCLUDED.se_total,
         pct_lexicon = EXCLUDED.pct_lexicon, pct_lo = EXCLUDED.pct_lo, pct_hi = EXCLUDED.pct_hi,
         percentile_pooled = EXCLUDED.percentile_pooled, mean_score = EXCLUDED.mean_score,
-        last_game_id = EXCLUDED.last_game_id, updated_at = now()`,
+        last_game_id = EXCLUDED.last_game_id, updated_at = now()
+     WHERE EXISTS (SELECT 1 FROM players WHERE id = EXCLUDED.player_id AND deleted_at IS NULL)`,
     [
       playerId, RANKING_WINDOW, gamesRes.rows.length, meanHits,
       est.theta, est.se, seTotal, pct, lo, hi, pctile, meanScore, gameIds[0],

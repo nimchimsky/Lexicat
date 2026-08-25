@@ -1,12 +1,15 @@
 // Estimació d'habilitat θ amb 2PL i MAP. Mòdul pur.
 //
 // La interfície estimateAbility(responses, itemParams, model) és el punt
-// d'extensió per al futur model de resposta graduada: quan hi hagi prou dades
-// graduades calibrades, s'afegeix "graded_2pl_map" aquí, es bumpa
-// calibration_version i es re-puntua el passat sense tocar res més.
+// d'extensió de models. Hi ha dos implementats:
+//   · "binary_2pl_map"   — el vigent (cal-1): binaritza al 50% amb TIE_RULE.
+//   · "graded_2pl_map"   — resposta graduada amb criteri de persona (§3.1):
+//     entra quan hi hagi calibratge propi, bumpant calibration_version i
+//     re-puntuant el passat; la interfície no canvia.
 
 import { PRIOR_MEAN, PRIOR_SD, THETA_BOUND, NEWTON_MAX_ITER, TIE_RULE } from "../config";
 import { clamp, logistic } from "./math";
+import { estimateGradedAbility } from "./graded";
 import type { AbilityEstimate, GraduatedResponse, ItemParams } from "./types";
 
 /** P_i(θ) del 2PL. */
@@ -100,6 +103,9 @@ export function estimateAbility(
   itemParams: ItemParams[],
   model: EstimationModelLike = "binary_2pl_map"
 ): AbilityEstimate {
+  if (model === "graded_2pl_map") {
+    return estimateGradedAbility(responses, itemParams, model);
+  }
   if (model !== "binary_2pl_map") {
     throw new Error(
       `Model d'estimació desconegut: "${model}". El model graduat s'afegirà quan hi hagi calibratge propi.`

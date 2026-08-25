@@ -21,7 +21,9 @@ export default function GuestButton({
     setError(null);
     try {
       const res = await fetch("/api/game/guest", { method: "POST" });
-      if (!res.ok && res.status !== 429) {
+      if (!res.ok) {
+        // El 429 també és un error: el missatge del servidor («Massa convidats
+        // des d'aquesta IP») s'ha de mostrar, mai navegar sense sessió.
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(data.error ?? "No s'ha pogut crear la sessió de convidat");
       }

@@ -43,14 +43,18 @@ L'entrada té dos camins:
 - **Convidat (sense res):** «Juga ara» crea sessió de convidat; pots jugar tot
   i sortir als rànquings. Si més tard entres amb correu, conserves tot
   l'historial.
-- **Enllaç màgic:** correu a `/entrar`. En desenvolupament (sense clau de
-  correu) l'enllaç apareix a la pantalla i consola. A producció cal configurar
-  `RESEND_API_KEY` i `MAIL_FROM` (un remitent verificat a Resend).
+- **Enllaç màgic:** correu a `/entrar`. El correu porta a la intersticial
+  `/entrar/verificar`, on el botó fa el canvi de token per sessió (POST):
+  cap preview del correu no pot cremar el token d'un sol ús. En
+  desenvolupament (sense clau de correu) l'enllaç apareix a la pantalla i
+  consola. A producció cal configurar `RESEND_API_KEY` i `MAIL_FROM` (un
+  remitent verificat a Resend).
 
 ## Verificació
 
 ```bash
-npm test                # tests unitaris del mòdul psicomètric i de selecció
+npm test                # tests unitaris del mòdul psicomètric, selecció i model graduat
+npm run lint            # ESLint (next/core-web-vitals + typescript)
 npm run simulate        # arnès de simulació: recuperació de θ, SE, lexicó, d′, correlació rànquings
 npm run typecheck       # TypeScript estricte
 DATABASE_URL=... npm run test:integration   # criteris d'acceptació amb DB real
@@ -162,6 +166,11 @@ Totes quatre es desaven a cada partida i a cada resposta.
 - Refredament sostingut per `item_exposure`; relaxacions registrades.
 - Qualitat: RT<200 ms es marca; ≥20% marca la partida `suspect_fast`, que surt
   dels rànquings però es conserva. Abandonament definitiu a `DECISIONS.md`.
+- Manteniment programat (`vercel.json` → `/api/cron/sweep`, protegit amb
+  `CRON_SECRET`): abandona partides velles i poda sessions/tokens caducats.
+- El resultat d'una partida Pompeu es calcula FORA de la transacció de la
+  darrera resposta (mai amb el joc bloquejat); si el procés mor a mig camí,
+  la primera visita a /resultats repara el forat (`ensureGameResults`).
 
 ## Desplegament (Vercel + Neon)
 

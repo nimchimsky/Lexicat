@@ -47,9 +47,12 @@ el lema (mai el refredament) i ho registra a `selection_log`.
 
 **Pendent (únic punt realment obert d'aquest tema):** el CSV de calibratge NO
 porta mapatge morfològic, així que avui tots els ítems tenen `lemma_key` NULL i
-la restricció és inerta. Cal obtenir el parell forma→lema (URV, o derivar-lo
-d'una font morfològica catalana) i carregar-lo amb un script nou. Fins això,
-`cantar`/`cantaves` poden coincidir per atzar com abans.
+la restricció és inerta. **La via de càrrega ja és a punt:** el parell
+forma→lema (URV, o derivat d'una font morfològica catalana) es carrega amb
+`npx tsx scripts/load-lemma-map.ts` (`npm run db:lemmas` o `LEMMA_MAP_CSV=…`);
+el script ignora formes fora del banc, no toca res més i informa dels lemes
+distints carregats. Fins tenir les dades, `cantar`/`cantaves` poden coincidir
+per atzar com abans.
 
 ## RESOLT · 2. Slider i puntuació
 

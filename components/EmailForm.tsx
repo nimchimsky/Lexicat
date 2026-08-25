@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { responseErrorMessage } from "@/lib/client/api";
 
 export default function EmailForm() {
   const [email, setEmail] = useState("");
@@ -19,8 +20,8 @@ export default function EmailForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
+      if (!res.ok) throw new Error(await responseErrorMessage(res));
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Error");
       if (data.devUrl) setDevUrl(data.devUrl);
       else setSentNoDev(true);
     } catch (e2) {
@@ -65,8 +66,14 @@ export default function EmailForm() {
         placeholder="el-teu@correu.cat"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
+        aria-invalid={err ? true : undefined}
+        aria-describedby={err ? "email-error" : undefined}
       />
-      {err && <p style={{ color: "var(--bad)" }}>{err}</p>}
+      {err && (
+        <p className="field-error" role="alert" id="email-error">
+          {err}
+        </p>
+      )}
       <button className="btn" disabled={busy} type="submit">
         {busy ? "Enviant…" : "Envia'm l'enllaç"}
       </button>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { responseErrorMessage } from "@/lib/client/api";
 
 export default function NicknameForm({
   initialNickname = "",
@@ -29,8 +30,7 @@ export default function NicknameForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nickname }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Error");
+      if (!res.ok) throw new Error(await responseErrorMessage(res));
       router.push(redirectTo);
       router.refresh();
     } catch (e2) {
@@ -41,19 +41,27 @@ export default function NicknameForm({
 
   return (
     <form onSubmit={submit}>
-      <label htmlFor="nickname-input">{labelText}</label>
+      <label htmlFor="nickname-input">
+        {labelText} <span className="muted small">({nickname.length}/24)</span>
+      </label>
       <input
         id="nickname-input"
         type="text"
         required
         minLength={3}
         maxLength={24}
-        autoComplete="off"
+        autoComplete="nickname"
         placeholder="p. ex. pompeu"
         value={nickname}
         onChange={(e) => setNickname(e.target.value)}
+        aria-invalid={err ? true : undefined}
+        aria-describedby={err ? "nickname-error" : undefined}
       />
-      {err && <p style={{ color: "var(--bad)" }}>{err}</p>}
+      {err && (
+        <p className="field-error" role="alert" id="nickname-error">
+          {err}
+        </p>
+      )}
       <button className="btn" disabled={busy} type="submit">
         {busy ? "Guardant…" : submitLabel}
       </button>

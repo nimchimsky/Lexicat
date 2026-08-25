@@ -1,0 +1,22 @@
+{
+  "name": "Lexicat · Lèxic català",
+  "short_name": "Lexicat",
+  "description": "Mesura el teu lèxic en català: 100 estímuls, cap feedback, la teva estimació al final.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0907",
+  "theme_color": "#0a0907",
+  "lang": "ca",
+  "categories": ["games", "education"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
