@@ -23,6 +23,8 @@ export async function POST(req: Request) {
     const sent = await sendMagicLink(email.trim().toLowerCase(), url);
     return NextResponse.json({ ok: true, devUrl: sent.devUrl ?? null });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+    const message = (e as Error).message;
+    const status = message.startsWith("Servei de correu") ? 503 : 400;
+    return NextResponse.json({ error: message }, { status });
   }
 }

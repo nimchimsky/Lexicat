@@ -8,7 +8,7 @@ export async function GET(req: Request) {
   if (!token) return NextResponse.redirect(new URL("/entrar?error=token", req.url));
   try {
     const { hasNickname } = await redeemMagicToken(token);
-    return NextResponse.redirect(new URL(hasNickname ? "/joc" : "/benvingut", req.url));
+    return NextResponse.redirect(new URL(hasNickname ? "/" : "/benvingut", req.url));
   } catch {
     return NextResponse.redirect(new URL("/entrar?error=caducat", req.url));
   }

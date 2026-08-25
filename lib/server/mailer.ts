@@ -15,11 +15,24 @@ export interface SentLink {
 
 export async function sendMagicLink(email: string, url: string): Promise<SentLink> {
   const apiKey = process.env.RESEND_API_KEY;
-  if (apiKey) {
-    const from = process.env.MAIL_FROM ?? "Lexicat <onboarding@resend.dev>";
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
+  const isProd = process.env.NODE_ENV === "production";
+
+  if (!apiKey) {
+    if (isProd) {
+      throw new Error("Servei de correu no configurat: falta RESEND_API_KEY");
+    }
+    console.log(`\n[lexicat] Enllaç màgic per a ${email}:\n${url}\n`);
+    return { delivered: false, devUrl: url };
+  }
+
+  if (isProd && !process.env.MAIL_FROM) {
+    throw new Error("Servei de correu incomplet: falta MAIL_FROM");
+  }
+
+  const from = process.env.MAIL_FROM ?? "Lexicat <onboarding@resend.dev>";
+  const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
@@ -31,14 +44,9 @@ export async function sendMagicLink(email: string, url: string): Promise<SentLin
         html: `<p>Hola!</p><p><a href="${url}">Entra a Lexicat</a> (caduca en 15 minuts).</p><p>Si no has demanat tu aquest enllaç, ignora'l.</p>`,
       }),
     });
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new Error(`Resend ha fallat (${res.status}): ${body.slice(0, 200)}`);
-    }
-    return { delivered: true };
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Resend ha fallat (${res.status}): ${body.slice(0, 200)}`);
   }
-
-  const isProd = process.env.NODE_ENV === "production";
-  console.log(`\n[lexicat] Enllaç màgic per a ${email}:\n${url}\n`);
-  return { delivered: false, devUrl: isProd ? undefined : url };
+  return { delivered: true };
 }

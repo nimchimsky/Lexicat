@@ -11,7 +11,7 @@ export default async function Entrar({
   searchParams: Promise<{ error?: string }>;
 }) {
   const player = await currentPlayer();
-  if (player) redirect("/joc");
+  if (player) redirect("/");
   const { error } = await searchParams;
   return (
     <main>

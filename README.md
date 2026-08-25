@@ -44,8 +44,8 @@ L'entrada té dos camins:
   i sortir als rànquings. Si més tard entres amb correu, conserves tot
   l'historial.
 - **Enllaç màgic:** correu a `/entrar`. En desenvolupament (sense clau de
-  correu) l'enllaç apareix a la pantalla i consola. A producció: `RESEND_API_KEY`
-  (gratuït fins a 3.000/mes, via API HTTP, ideal per Vercel).
+  correu) l'enllaç apareix a la pantalla i consola. A producció cal configurar
+  `RESEND_API_KEY` i `MAIL_FROM` (un remitent verificat a Resend).
 
 ## Verificació
 
@@ -170,7 +170,7 @@ Totes quatre es desaven a cada partida i a cada resposta.
    `DATABASE_URL=... npm run db:setup` (migracions idempotents + ingesta; el CSV
    d'origen ha de ser accessible via `ITEM_BANK_CSV`).
 3. **Vercel:** importar el repo de GitHub; env vars `DATABASE_URL`,
-   `AUTH_SECRET`, opcionalment `RESEND_API_KEY` i `MAIL_FROM`.
+   `AUTH_SECRET`, `RESEND_API_KEY` i `MAIL_FROM`.
 4. Builds següents no toquen l'esquema; si hi ha migració nova,
    `npm run db:migrate` contra Neon abans del deploy.
 

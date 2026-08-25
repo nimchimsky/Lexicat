@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 export default function GuestButton({
   label = "Juga com a convidat",
   primary = false,
-  href = "/joc",
+  href = "/",
 }: {
   label?: string;
   primary?: boolean;

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 export default function NicknameForm({
   initialNickname = "",
-  redirectTo = "/joc",
+  redirectTo = "/",
   labelText = "Sobrenom públic",
   submitLabel = "Comença a jugar",
 }: {

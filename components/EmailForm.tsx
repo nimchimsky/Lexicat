@@ -34,7 +34,7 @@ export default function EmailForm() {
     return (
       <div className="card">
         <p>
-          <b>Mode desenvolupament</b> (sense SMTP configurat): l&apos;enllaç
+          <b>Mode desenvolupament</b> (sense servei de correu configurat): l&apos;enllaç
           màgic és directe:
         </p>
         <a href={devUrl}>Entrar amb l&apos;enllaç</a>
