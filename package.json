@@ -18,7 +18,7 @@
     "db:lemmas": "tsx scripts/load-lemma-map.ts",
     "db:setup": "tsx scripts/migrate.ts && tsx scripts/ingest-item-bank.ts",
     "simulate": "tsx scripts/simulate.ts",
-    "test": "vitest run tests/psychometrics.test.ts tests/mapa.test.ts tests/killian.test.ts tests/graded.test.ts --configLoader native",
+    "test": "vitest run tests/psychometrics.test.ts tests/mapa.test.ts tests/killian.test.ts tests/graded.test.ts tests/profile.test.ts --configLoader native",
     "test:integration": "vitest run tests/integration.acceptance.test.ts --configLoader native"
   },
   "dependencies": {

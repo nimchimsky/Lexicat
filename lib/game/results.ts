@@ -117,10 +117,12 @@ export function rawCounts(responses: ScoredResponse[]): {
     const saidWord = binarize(r.confidence);
     if (r.isWord) {
       nWords++;
-      saidWord ? hits++ : misses++;
+      if (saidWord) hits++;
+      else misses++;
     } else {
       nPseudo++;
-      saidWord ? falseAlarms++ : correctRejections++;
+      if (saidWord) falseAlarms++;
+      else correctRejections++;
     }
   }
   return { hits, misses, falseAlarms, correctRejections, nWords, nPseudo, nFiftyFifty };

@@ -52,13 +52,18 @@ export default function Privadesa() {
       <h2>Com s&apos;esborra</h2>
       <p>
         A «El meu compte» tens el botó d&apos;esborrar. Quan l&apos;uses: el correu
-        desapareix de la base de dades, el sobrenom passa a un identificador opac
-        i les sessions i tokens es destrueixen. <b>Les respostes ja entrades al
-        calibratge es conserven, però completament deslligades de qualsevol persona
-        identificable</b>: formen part de paràmetres estadístics agregats (la
-        dificultat i la discriminació dels ítems) que ja no poden atribuir-se a
-        ningú. Si demanes l&apos;esborrament abans que les teves respostes entrin
-        en cap càlcul agregat, s&apos;eliminen totes.
+        desapareix de la base de dades, el sobrenom passa a un identificador opac,
+        les sessions i tokens es destrueixen, el teu perfil opcional s&apos;elimina
+        i també s&apos;esborren les dades derivades del teu compte: el progrés del
+        mapa i la memòria d&apos;ítems que has vist.
+      </p>
+      <p>
+        <b>Les respostes en cru es conserven</b>, perquè sense elles el calibratge
+        no es manté just. Queden lligades només a un identificador opac sense correu,
+        sobrenom ni perfil: cap pàgina del joc ni cap consulta no les tornarà a
+        vincular a una persona ni a un compte futur. Cal dir-ho amb precisió:
+        això és pseudonimització, no anonimització total — la fila existeix, amb un
+        identificador estable, encara que cap informació identificativa l&apos;acompanyi.
       </p>
 
       <h2>Rànquings i comparacions</h2>

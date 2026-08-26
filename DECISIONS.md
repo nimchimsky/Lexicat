@@ -120,7 +120,7 @@ i els camps de temps mesuren exactament igual que abans.
 
 ## 10. Mode convidat sense login (decisió Roger 22/08/2026)
 
-«Juga ara» crea un jugador sense correu amb sessió en galeta d'1 any: pot jugar,
+«Juga ara» crea un jugador sense correu amb sessió en galeta de 180 dies (`SESSION_TTL_MS`): pot jugar,
 veure resultats i sortir als rànquings amb sobrenom `convidat-*`. L'identitat
 persistente es manté: si el convidat entra després amb correu, l'enllaç màgic
 s'assigna al MATEIX jugador i conserva tot l'historial. Correu gratuït triat:
@@ -329,3 +329,54 @@ La revisió sistemàtica del canvi va trobar punts que s'han corregit alhora:
   enviament normal i reintento (la còpia del reintento havia perdut el
   prefetch) i tots els fetch passen pel tractament d'errors compartit.
 - **CSP report-only** i `X-Robots-Tag: noindex` als previews de Vercel.
+
+## 15. Segona passada d'integritat, rendiment i operació (26/08/2026)
+
+Revisió completa del codi existent. El que canvia decisions anteriors:
+
+- **La pausa de Kilian deixa de regalar temps** (supera el comportament de
+  §14): tapar l'estímul no tapa la memòria — pensar durant la pausa i respondre
+  amb la barra gairebé plena era un forat de puntuació. Ara el temps pausat
+  compta: en reprendre, la barra torna retallada el que ha durat la pausa (i
+  si s'ha esgotat, timeout). La pausa automàtica per pestanya amagada segueix
+  la mateixa regla.
+- **Els temps els acota el servidor:** `game_items.served_at` (migració 0009)
+  marca quan es serveix cada posició; a `submitResponse`, l'elapsed de Kilian i
+  el RT de Pompeu queden acotats pel temps de paret del servidor (sostre físic
+  + sòl amb tolerància `SERVE_OVERHEAD_MS` per a xarxa/render/prefetch). Un
+  client modificat ja no pot declarar temps impossibles; sense `served_at`
+  (partides velles) només es retalla al rang de la barra com abans.
+- **Rate limit compartit entre instàncies:** buckets a la taula
+  `rate_limit_buckets` (upsert atòmic); el comptador en memòria per procés feia
+  el límit real N vegades el declarat amb N lambdes. Falla tancat si la taula
+  no hi és; la poda és del sweep.
+- **Rànquings sense empats ballants:** desempat determinista a totes les
+  taules (mateix valor → guanya qui el va assolir abans → `player_id`), també
+  a la fila «la teva posició». I el top N públic ve de caché (`unstable_cache`,
+  60 s): les pàgines són force-dynamic però la consulta pesada no corre a cada
+  petició.
+- **Dubte 6 aplicat:** fora «Millors partides · lexicó» (correlació 0,997 amb
+  «encerts»): dos taulers per a una sola cosa. El lexicó ponderat queda només
+  al rànquing general.
+- **Esborrament coherent amb /privadesa:** `deleteAccount` també esborra
+  `player_regions` i `item_exposure` (dades derivades d'una identitat que es
+  pseudonimitza), i el text legal descriu exactament què es conserva
+  (respostes en cru, lligades a un identificador opac) i què no — sense
+  prometre cap esborrament condicional que el codi no fa.
+- **Caché del banc infinita:** el banc és immutable per versió; el TTL d'1 minut
+  pagava la consulta sencera (~71k files) innecessàriament a cada cold start.
+- **Abandonaments distingibles:** començar partida nova escriu
+  `abandoned_reason = 'nova_partida'`; marxar explícitament continua sent
+  `'usuari'`.
+- **Mapa compacte més prim:** passada de precisió flotant (1 decimal) al
+  generador — 425 KB → ~357 KB raw, ~155 KB → ~119 KB gzip, visualment
+  idèntic sobre un viewBox de 3121×5016.
+- **Caché dels SVG del mapa:** `:path+` (mai `:path*`, que també capturava la
+  PÀGINA /mapa amb caché immutable d'un any) i `max-age` curt: els noms de
+  fitxer no porten hash.
+- **CI:** workflow de GitHub Actions (typecheck + lint + test) a cada push/PR;
+  `npm test` inclou `tests/profile.test.ts`, que quedava fora.
+- **Accessibilitat:** la paraula estimul s'anuncia per regió viva als dos modes.
+- **Docs alineats amb el codi:** galeta de sessió de 180 dies (no «d'1 any»),
+  fora `AUTH_SECRET` (cap línia de codi la fa servir), `INSTABILITY_SE = 0,278`
+  marcat com a provisional (estudi previ, altre format, retest immediat).

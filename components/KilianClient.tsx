@@ -14,7 +14,8 @@ import {
   KILIAN_YES_CONFIDENCE,
   KILIAN_NO_CONFIDENCE,
 } from "@/lib/config";
-import { postJson, responseErrorMessage } from "@/lib/client/api";import { Stimulus, LoadingScreen, ProgressTicks } from "@/components/game/Shared";
+import { postJson, responseErrorMessage } from "@/lib/client/api";
+import { Stimulus, LoadingScreen, ProgressTicks } from "@/components/game/Shared";
 import { RetryScreen } from "@/components/game/RetryScreen";
 
 export interface KilianResume {
@@ -393,9 +394,11 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
   };
 
   // ------------------------------------------------------------------ pausa
-  // La pausa tapa l'estímul i congela la barra: no es pot estudiar la paraula
-  // ni perdre punts mentre dura. L'elapsed de l'ítem es desplaça el temps
-  // pausat, així els punts en continuar són els que tocarien.
+  // La pausa tapa l'estímul, però NO regala temps: en reprendre, la barra
+  // torna retallada el temps que ha durat la pausa (i si s'ha esgotat, és un
+  // timeout). L'elapsed de l'ítem inclou la pausa — coherent amb served_at,
+  // que el servidor fa servir per acotar els temps declarats. Tapar l'estímul
+  // no tapa la memòria: pensar-ho durant la pausa costa els punts de l'ítem.
   function pauseGame() {
     if (phase !== "playing") return;
     stopBar();
@@ -405,9 +408,17 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
 
   function resumeGame() {
     if (phase !== "paused" || !gameId || !item) return;
-    shownAt.current += performance.now() - pauseStartedAt.current;
+    const pausedMs = performance.now() - pauseStartedAt.current;
+    const remain = barRemain.current - pausedMs / KILIAN_BAR_MS;
     setPhase("playing");
-    runBar(() => respondRef.current(null), barRemain.current);
+    if (remain <= 0) {
+      barRemain.current = 0;
+      // Esgotada durant la pausa: timeout normal. Es crida send directament:
+      // respondRef comprova el phase del render (encara «paused» aquí).
+      void send(null, null);
+      return;
+    }
+    runBar(() => respondRef.current(null), remain);
   }
 
   // ------------------------------------------------------------------ partida nova
@@ -453,8 +464,9 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
 
   // ------------------------------------------------------------------ pestanya amagada
   // La barra mesura temps de paret: amb la pestanya en segon pla el rAF
-  // s'atura però el rellotge no, i en tornar la partida hauria expirat de
-  // cop. Pausa automàtica en amagar-se: en continuar, la barra reprèn on era.
+  // s'atura però el rellotge no. Pausa automàtica en amagar-se, amb la MATEIXA
+  // regla que la pausa manual: el temps amagat compta — en tornar, o queda
+  // barra o és un timeout. Amagar la pestanya no és una pausa infinita.
   useEffect(() => {
     if (phase !== "playing") return;
     const onVisibility = () => {
@@ -787,8 +799,8 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
         ) : null}
       </div>
 
-      {/* Pausa: cobreix tota la pantalla (l'estímul queda tapat) i el temps
-          no corre: la barra reprèn exactament on era en continuar. */}
+      {/* Pausa: cobreix tota la pantalla (l'estímul queda tapat) però el
+          temps corre: la barra torna retallada el que ha durat la pausa. */}
       {phase === "paused" ? (
         <div
           ref={pausedDialogRef}
@@ -800,7 +812,8 @@ export default function KilianClient({ resume, firstTime }: KilianClientProps) {
           <p className="eyebrow">Pausa</p>
           <h2>La partida espera.</h2>
           <p className="muted small">
-            Estímul tapat i rellotge congelat: res no corre mentre duri la pausa.
+            Estímul tapat. El rellotge no perdona: en continuar, la barra torna
+            retallada el temps que ha durat la pausa.
           </p>
           <button className="btn" onClick={resumeGame}>
             Continua

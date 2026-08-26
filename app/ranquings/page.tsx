@@ -119,12 +119,6 @@ export default async function Ranquings({
             unit: "mitjana",
             rows: boards.generalHits,
           },
-          {
-            title: "Millors partides · lexicó",
-            note: "Encert ponderat per la dificultat real de cada paraula, penalitzant falses alarmes.",
-            unit: "índex",
-            rows: boards.individualLexicon,
-          },
         ]
       : [];
 
@@ -184,8 +178,10 @@ export default async function Ranquings({
             ))}
             <p className="small muted">
               Els generals usen les últimes 5 partides completes vàlides (mai «la teva
-              millor partida», que regala precisió a qui més insisteix). Els dos primers
-              ordenen gairebé igual (correlació ≈ 0,997).
+              millor partida», que regala precisió a qui més insisteix). La millor
+              partida per encerts i el lexicó ponderat ordenaven gairebé igual
+              (correlació ≈ 0,997): dos taulers per a una sola cosa, i el lexicó
+              ja hi és al general, on diferenciar té sentit.
             </p>
           </details>
         </>

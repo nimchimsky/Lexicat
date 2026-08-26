@@ -53,7 +53,7 @@ L'entrada té dos camins:
 ## Verificació
 
 ```bash
-npm test                # tests unitaris del mòdul psicomètric, selecció i model graduat
+npm test                # tests unitaris (psicometria, selecció, Kilian, mapa, perfil)
 npm run lint            # ESLint (next/core-web-vitals + typescript)
 npm run simulate        # arnès de simulació: recuperació de θ, SE, lexicó, d′, correlació rànquings
 npm run typecheck       # TypeScript estricte
@@ -61,6 +61,15 @@ DATABASE_URL=... npm run test:integration   # criteris d'acceptació amb DB real
 npx tsx scripts/smoke.ts                    # prova de foc end-to-end (servidor dev en marxa)
 npx tsx scripts/exposure-report.ts [playerId]   # monitor d'exposició d'ítems
 ```
+
+CI: `.github/workflows/ci.yml` corre `typecheck` + `lint` + `test` a cada
+push i PR — res no es trenca en silenci.
+
+Nota per a Windows local: el test pesat de psicometria (simulacions MAP de
+~30 s en un sol fil) pot disparar de tant en tant un «Timeout calling
+onTaskUpdate» de Vitest que fa fallar la suite SENSE cap test vermell — és el
+flack conegut d'IPC de Vitest a Windows (`vitest.config.ts` ja corre amb un
+sol fork per minimitzar-lo). Torna'l a executar; al CI (Linux) no apareix.
 
 La simulació comprova els criteris 4, 5, 7 i 8 del prompt: biaix de θ < 0,02,
 SE ≈ 0,238 / 0,274 / 0,342 (MAP), % del lexicó ≈ 65,2 / 78,1 / 87,1 i sostre de
@@ -179,7 +188,7 @@ Totes quatre es desaven a cada partida i a cada resposta.
    `DATABASE_URL=... npm run db:setup` (migracions idempotents + ingesta; el CSV
    d'origen ha de ser accessible via `ITEM_BANK_CSV`).
 3. **Vercel:** importar el repo de GitHub; env vars `DATABASE_URL`,
-   `AUTH_SECRET`, `RESEND_API_KEY` i `MAIL_FROM`.
+   `RESEND_API_KEY` (opcional) i `MAIL_FROM`.
 4. Builds següents no toquen l'esquema; si hi ha migració nova,
    `npm run db:migrate` contra Neon abans del deploy.
 

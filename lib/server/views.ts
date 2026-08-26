@@ -1,6 +1,7 @@
 // Consultes de lectura per a la pantalla de resultats, rànquings i perfil.
 // is_word només es revela quan la resposta ja està registrada (§9).
 
+import { unstable_cache } from "next/cache";
 import { query } from "./db";
 import { HttpError } from "./http";
 import { loadBank } from "./bank";
@@ -316,50 +317,105 @@ export interface RankingRow {
  *  mateix predicat sobre games — mantén-los alineats. */
 const ELIGIBLE_GAME_SQL = `g.status = 'completed' AND g.quality_flag IS NULL`;
 
+// ---------------------------------------------------------------------------
+// Caché dels taulers públics. El top N no depèn de qui consulta: es pot
+// servir de caché compartida (60 s) i la fila «la teva posició» es resol
+// a part, sense caché, només quan el jugador no surt al top.
+// ---------------------------------------------------------------------------
+
+const RANKINGS_REVALIDATE_S = 60;
+/** Clau de versió: bumpa-la per invalidar tots els taulers en un deploy. */
+const RANKINGS_CACHE_VERSION = "v2";
+
 /**
- * Tauler de millors partides Pompeu: UNA fila per jugador (el seu millor
- * registre), ordenada i numerada sobre TOTA la població; després es retalla
- * al top N més la fila de qui consulta. El DISTINCT ON viu en una subconsulta
- * SENSE límit i el top-N s'aplica després, ja ordenat: limitar abans
- * retallaria un subconjunt arbitrari de jugadors (ordenats per UUID) i podria
- * ometre els líders reals.
+ * Caché de tauler públic. Fora de l'entorn Next (tests d'integració, scripts)
+ * `unstable_cache` pot no estar disponible: la caché és una optimització, mai
+ * un requisit — cau al directe.
  */
-async function bestGameBoard(
-  playerId: string | null,
-  column: "n_correct" | "lexicon_game_score"
-): Promise<RankingRow[]> {
-  const selfFilter = playerId ? ` OR ranked.player_id = $1` : "";
-  const params = playerId ? [playerId] : [];
-  const res = await query<{
-    player_id: string; rank: number; nickname: string | null; value: number;
-  }>(
-    `SELECT ranked.player_id, ranked.rank, p.nickname, ranked.value::float AS value
+async function withBoardCache<T>(
+  name: string,
+  fn: () => Promise<T>
+): Promise<T> {
+  try {
+    const cached = unstable_cache(
+      fn,
+      ["ranquings", RANKINGS_CACHE_VERSION, name],
+      { revalidate: RANKINGS_REVALIDATE_S }
+    );
+    return await cached();
+  } catch (e) {
+    if (process.env.NODE_ENV === "development") {
+      console.warn(`[views] caché de rànquings no disponible (${name}):`, e);
+    }
+    return fn();
+  }
+}
+
+interface BoardRowInternal {
+  player_id: string;
+  nickname: string | null;
+  value: number;
+}
+
+/**
+ * Files del tauler de millors partides Pompeu (UNA fila per jugador, el seu
+ * millor registre) ordenades sobre TOTA la població. Desempat determinista:
+ * mateix valor guanya qui el va assolir ABANS (finished_at ASC) i, com a
+ * últim recurs, player_id — sense això les posicions ballen entre peticions.
+ * El DISTINCT ON viu en una subconsulta SENSE límit i el top-N s'aplica
+ * després, ja ordenat: limitar abans retallaria un subconjunt arbitrari de
+ * jugadors (ordenats per UUID) i podria ometre els líders reals.
+ */
+async function bestGameBoardRows(column: "n_correct" | "lexicon_game_score"): Promise<BoardRowInternal[]> {
+  const res = await query<BoardRowInternal>(
+    `SELECT b.player_id, p.nickname, b.value::float AS value
      FROM (
-       SELECT b.player_id, b.value,
-              ROW_NUMBER() OVER (ORDER BY b.value DESC, b.tiebreak ASC) AS rank
-       FROM (
-         SELECT DISTINCT ON (g.player_id)
-                g.player_id,
-                gr.${column}::float AS value,
-                gr.${column} AS tiebreak
-         FROM games g
-         JOIN players p ON p.id = g.player_id
-         JOIN game_results gr ON gr.game_id = g.id
-         WHERE ${ELIGIBLE_GAME_SQL} AND p.deleted_at IS NULL AND g.mode = 'pompeu'
-         ORDER BY g.player_id, gr.${column} DESC, g.finished_at ASC
-       ) b
-     ) ranked
-     JOIN players p ON p.id = ranked.player_id
-     WHERE ranked.rank <= ${RANKING_TOP_N}${selfFilter}
-     ORDER BY ranked.rank`,
-    params
+       SELECT DISTINCT ON (g.player_id)
+              g.player_id,
+              gr.${column} AS value,
+              g.finished_at,
+              g.id AS game_id
+       FROM games g
+       JOIN players p ON p.id = g.player_id
+       JOIN game_results gr ON gr.game_id = g.id
+       WHERE ${ELIGIBLE_GAME_SQL} AND p.deleted_at IS NULL AND g.mode = 'pompeu'
+       ORDER BY g.player_id, gr.${column} DESC, g.finished_at ASC, g.id ASC
+     ) b
+     JOIN players p ON p.id = b.player_id
+     ORDER BY b.value DESC, b.finished_at ASC, b.player_id ASC
+     LIMIT ${RANKING_TOP_N}`
   );
-  return res.rows.map((r) => ({
-    rank: Number(r.rank),
-    nickname: r.nickname,
-    value: Number(r.value),
-    isMe: playerId != null && r.player_id === playerId,
-  }));
+  return res.rows;
+}
+
+/** Fila «la teva posició» del tauler de millors partides, amb el rang comptat
+ *  sobre tota la població i els MATEIXOS desempats que el tauler visible. */
+async function bestGameSelfRow(
+  playerId: string,
+  column: "n_correct" | "lexicon_game_score"
+): Promise<(BoardRowInternal & { rank: number }) | null> {
+  const res = await query<{ player_id: string; nickname: string | null; value: number; rank: number }>(
+    `WITH best AS (
+       SELECT DISTINCT ON (g.player_id)
+              g.player_id, gr.${column} AS value, g.finished_at, g.id AS game_id
+       FROM games g
+       JOIN players p ON p.id = g.player_id
+       JOIN game_results gr ON gr.game_id = g.id
+       WHERE ${ELIGIBLE_GAME_SQL} AND p.deleted_at IS NULL AND g.mode = 'pompeu'
+       ORDER BY g.player_id, gr.${column} DESC, g.finished_at ASC, g.id ASC
+     )
+     SELECT m.player_id, p.nickname, m.value::float AS value,
+            (SELECT COUNT(*) + 1 FROM best o
+             WHERE o.value > m.value
+                OR (o.value = m.value
+                    AND (o.finished_at, o.player_id) < (m.finished_at, m.player_id))
+            )::int AS rank
+     FROM best m
+     JOIN players p ON p.id = m.player_id
+     WHERE m.player_id = $1`,
+    [playerId]
+  );
+  return res.rows[0] ?? null;
 }
 
 export interface KilianRankingRow {
@@ -372,95 +428,224 @@ export interface KilianRankingRow {
   isMe?: boolean;
 }
 
+interface KilianBoardRowInternal {
+  player_id: string;
+  nickname: string | null;
+  score: number;
+  best_streak: number | null;
+  max_multiplier: number | null;
+}
+
+/** Files públiques del tauler Kilian: millor partida per jugador, per punts. */
+async function kilianBoardRows(): Promise<KilianBoardRowInternal[]> {
+  const res = await query<KilianBoardRowInternal>(
+    `SELECT best.player_id, p.nickname, best.score::int AS score,
+            best.best_streak::int AS best_streak,
+            best.max_multiplier::float AS max_multiplier
+     FROM (
+       SELECT DISTINCT ON (g.player_id)
+              g.player_id, gr.score, gr.best_streak, gr.max_multiplier,
+              g.finished_at, g.id AS game_id
+       FROM games g
+       JOIN players p ON p.id = g.player_id
+       JOIN game_results gr ON gr.game_id = g.id
+       WHERE ${ELIGIBLE_GAME_SQL} AND p.deleted_at IS NULL AND g.mode = 'killian'
+       ORDER BY g.player_id, gr.score DESC, g.finished_at ASC, g.id ASC
+     ) best
+     JOIN players p ON p.id = best.player_id
+     ORDER BY best.score DESC, best.finished_at ASC, best.player_id ASC
+     LIMIT ${RANKING_TOP_N}`
+  );
+  return res.rows;
+}
+
+/** Fila «la teva posició» Kilian, mateixos desempats que el tauler. */
+async function kilianSelfRow(
+  playerId: string
+): Promise<(KilianBoardRowInternal & { rank: number }) | null> {
+  const res = await query<{
+    player_id: string; nickname: string | null; score: number;
+    best_streak: number | null; max_multiplier: number | null; rank: number;
+  }>(
+    `WITH best AS (
+       SELECT DISTINCT ON (g.player_id)
+              g.player_id, gr.score, gr.best_streak, gr.max_multiplier,
+              g.finished_at, g.id AS game_id
+       FROM games g
+       JOIN players p ON p.id = g.player_id
+       JOIN game_results gr ON gr.game_id = g.id
+       WHERE ${ELIGIBLE_GAME_SQL} AND p.deleted_at IS NULL AND g.mode = 'killian'
+       ORDER BY g.player_id, gr.score DESC, g.finished_at ASC, g.id ASC
+     )
+     SELECT m.player_id, p.nickname, m.score::int AS score,
+            m.best_streak::int AS best_streak,
+            m.max_multiplier::float AS max_multiplier,
+            (SELECT COUNT(*) + 1 FROM best o
+             WHERE o.score > m.score
+                OR (o.score = m.score
+                    AND (o.finished_at, o.player_id) < (m.finished_at, m.player_id))
+            )::int AS rank
+     FROM best m
+     JOIN players p ON p.id = m.player_id
+     WHERE m.player_id = $1`,
+    [playerId]
+  );
+  return res.rows[0] ?? null;
+}
+
 /**
  * Millor partida Kiliana per jugador, ordenada per punts (rànquings separats
- * per mode), amb el mateix contracte top-N + «la teva posició».
+ * per mode), amb el mateix contracte top-N + «la teva posició». El tauler
+ * públic ve de caché; la fila pròpia, si cal, es resol a part.
  */
 export async function getKilianRankings(
   playerId?: string | null
 ): Promise<KilianRankingRow[]> {
-  const selfFilter = playerId ? ` OR ranked.player_id = $1` : "";
-  const params = playerId ? [playerId] : [];
-  const res = await query<{
-    player_id: string; rank: number; nickname: string | null; score: number;
-    best_streak: number | null; max_multiplier: number | null;
-  }>(
-    `SELECT ranked.player_id, ranked.rank, ranked.nickname, ranked.score,
-            ranked.best_streak, ranked.max_multiplier
-     FROM (
-       SELECT best.player_id, best.nickname, best.score, best.best_streak,
-              best.max_multiplier,
-              ROW_NUMBER() OVER (ORDER BY best.score DESC) AS rank
-       FROM (
-         SELECT DISTINCT ON (g.player_id)
-                g.player_id, p.nickname, gr.score::int AS score,
-                gr.best_streak::int AS best_streak,
-                gr.max_multiplier::float AS max_multiplier
-         FROM games g
-         JOIN players p ON p.id = g.player_id
-         JOIN game_results gr ON gr.game_id = g.id
-         WHERE ${ELIGIBLE_GAME_SQL} AND p.deleted_at IS NULL AND g.mode = 'killian'
-         ORDER BY g.player_id, gr.score DESC, g.finished_at ASC
-       ) best
-     ) ranked
-     WHERE ranked.rank <= ${RANKING_TOP_N}${selfFilter}
-     ORDER BY ranked.rank`,
-    params
-  );
-  return res.rows.map((r) => ({
-    rank: Number(r.rank),
+  const rows = await withBoardCache("killian", kilianBoardRows);
+  const mapped: KilianRankingRow[] = rows.map((r, i) => ({
+    rank: i + 1,
     nickname: r.nickname,
     score: Number(r.score),
     bestStreak: r.best_streak ?? 0,
     maxMultiplier: r.max_multiplier ?? 1,
     isMe: playerId != null && r.player_id === playerId,
   }));
+  if (playerId && !mapped.some((r) => r.isMe)) {
+    const mine = await kilianSelfRow(playerId);
+    if (mine) {
+      mapped.push({
+        rank: Number(mine.rank),
+        nickname: mine.nickname,
+        score: Number(mine.score),
+        bestStreak: mine.best_streak ?? 0,
+        maxMultiplier: mine.max_multiplier ?? 1,
+        isMe: true,
+      });
+    }
+  }
+  return mapped;
+}
+
+interface StandingRowInternal extends BoardRowInternal {
+  n_games: number;
+  lo: number;
+  hi: number;
 }
 
 /** Tauler general (player_standings): una fila per jugador de naixement. */
-async function standingBoard(
-  playerId: string | null,
-  column: "mean_hits" | "pct_lexicon"
-): Promise<RankingRow[]> {
-  const selfFilter = playerId ? ` OR ranked.player_id = $1` : "";
-  const params = playerId ? [playerId] : [];
-  const res = await query<{
-    player_id: string; rank: number; nickname: string | null; value: number;
-    lo: number; hi: number; n_games: number;
-  }>(
-    `SELECT ranked.player_id, ranked.rank, ranked.nickname,
-            ranked.${column}::float AS value,
-            ranked.pct_lo::float AS lo, ranked.pct_hi::float AS hi,
-            ranked.n_games
-     FROM (
-       SELECT ps.*, p.nickname,
-              ROW_NUMBER() OVER (ORDER BY ps.${column} DESC) AS rank
-       FROM player_standings ps
-       JOIN players p ON p.id = ps.player_id
-       WHERE p.deleted_at IS NULL AND ps.n_games > 0
-     ) ranked
-     WHERE ranked.rank <= ${RANKING_TOP_N}${selfFilter}
-     ORDER BY ranked.rank`,
-    params
+async function standingBoardRows(column: "mean_hits" | "pct_lexicon"): Promise<StandingRowInternal[]> {
+  const res = await query<StandingRowInternal>(
+    `SELECT ps.player_id, p.nickname,
+            ps.${column}::float AS value,
+            ps.pct_lo::float AS lo, ps.pct_hi::float AS hi,
+            ps.n_games
+     FROM player_standings ps
+     JOIN players p ON p.id = ps.player_id
+     WHERE p.deleted_at IS NULL AND ps.n_games > 0
+     ORDER BY ps.${column} DESC, ps.player_id ASC
+     LIMIT ${RANKING_TOP_N}`
   );
-  return res.rows.map((r) => ({
-    rank: Number(r.rank),
-    nickname: r.nickname,
-    value: Number(r.value),
-    detail: `${r.n_games}/5${column === "pct_lexicon" ? ` · IC95 ${Number(r.lo).toFixed(1)}–${Number(r.hi).toFixed(1)}%` : " partides"}`,
-    isMe: playerId != null && r.player_id === playerId,
-  }));
+  return res.rows;
+}
+
+/** Fila «la teva posició» del tauler general, mateixos desempats. */
+async function standingSelfRow(
+  playerId: string,
+  column: "mean_hits" | "pct_lexicon"
+): Promise<(StandingRowInternal & { rank: number }) | null> {
+  const res = await query<{
+    player_id: string; nickname: string | null; value: number;
+    lo: number; hi: number; n_games: number; rank: number;
+  }>(
+    `SELECT m.player_id, p.nickname,
+            m.${column}::float AS value,
+            m.pct_lo::float AS lo, m.pct_hi::float AS hi, m.n_games,
+            (SELECT COUNT(*) + 1
+             FROM player_standings o
+             JOIN players op ON op.id = o.player_id
+             WHERE op.deleted_at IS NULL AND o.n_games > 0
+               AND (o.${column} > m.${column}
+                    OR (o.${column} = m.${column} AND o.player_id < m.player_id))
+            )::int AS rank
+     FROM player_standings m
+     JOIN players p ON p.id = m.player_id
+     WHERE m.player_id = $1 AND m.n_games > 0`,
+    [playerId]
+  );
+  return res.rows[0] ?? null;
 }
 
 export async function getRankings(playerId?: string | null) {
-  const [individualHits, individualLexicon, generalHits, generalLexicon] = await Promise.all([
-    bestGameBoard(playerId ?? null, "n_correct"),
-    bestGameBoard(playerId ?? null, "lexicon_game_score"),
-    standingBoard(playerId ?? null, "mean_hits"),
-    standingBoard(playerId ?? null, "pct_lexicon"),
+  // Dubte 6 tancat (25/08/2026): «millor partida · lexicó» fora (correlacionava
+  // 0,997 amb «encerts»: eren dos taulers per a una sola cosa). El lexicó
+  // ponderat queda NOMÉS al rànquing general, on diferenciar té sentit.
+  const [rawHits, rawGeneralHits, rawGeneralPct] = await Promise.all([
+    withBoardCache("best-hits", () => bestGameBoardRows("n_correct")),
+    withBoardCache("general-hits", () => standingBoardRows("mean_hits")),
+    withBoardCache("general-pct", () => standingBoardRows("pct_lexicon")),
   ]);
 
-  return { individualHits, individualLexicon, generalHits, generalLexicon };
+  const hitsDetail = (r: StandingRowInternal) => `${r.n_games}/5 partides`;
+  const pctDetail = (r: StandingRowInternal) =>
+    `${r.n_games}/5 · IC95 ${Number(r.lo).toFixed(1)}–${Number(r.hi).toFixed(1)}%`;
+
+  const toRows = (
+    rows: BoardRowInternal[],
+    detailOf?: (r: StandingRowInternal) => string
+  ): RankingRow[] =>
+    rows.map((r, i) => ({
+      rank: i + 1,
+      nickname: r.nickname,
+      value: Number(r.value),
+      detail: detailOf?.(r as StandingRowInternal),
+      isMe: playerId != null && r.player_id === playerId,
+    }));
+
+  const individualHits = toRows(rawHits);
+  const generalHits = toRows(rawGeneralHits, hitsDetail);
+  const generalLexiconRows = toRows(rawGeneralPct, pctDetail);
+
+  // «La teva posició»: si el jugador no surt al top N, es resol a part
+  // (sense caché, amb els mateixos desempats que el tauler visible).
+  if (playerId) {
+    if (!individualHits.some((r) => r.isMe)) {
+      const mine = await bestGameSelfRow(playerId, "n_correct");
+      if (mine) {
+        individualHits.push({
+          rank: Number(mine.rank),
+          nickname: mine.nickname,
+          value: Number(mine.value),
+          isMe: true,
+        });
+      }
+    }
+    if (!generalHits.some((r) => r.isMe)) {
+      const mine = await standingSelfRow(playerId, "mean_hits");
+      if (mine) {
+        generalHits.push({
+          rank: Number(mine.rank),
+          nickname: mine.nickname,
+          value: Number(mine.value),
+          detail: hitsDetail(mine),
+          isMe: true,
+        });
+      }
+    }
+    if (!generalLexiconRows.some((r) => r.isMe)) {
+      const mine = await standingSelfRow(playerId, "pct_lexicon");
+      if (mine) {
+        generalLexiconRows.push({
+          rank: Number(mine.rank),
+          nickname: mine.nickname,
+          value: Number(mine.value),
+          detail: pctDetail(mine),
+          isMe: true,
+        });
+      }
+    }
+  }
+
+  return { individualHits, generalHits, generalLexicon: generalLexiconRows };
 }
 
 /** Hi ha alguna partida completada d'aquest mode? (per al tutorial de Kilian) */
@@ -474,7 +659,8 @@ export async function hasCompletedGames(playerId: string, mode: "pompeu" | "kill
   return res.rowCount !== 0;
 }
 
-export async function getPlayerSummary(playerId: string) {  const counts = await query<{ total: string; completed: string }>(
+export async function getPlayerSummary(playerId: string) {
+  const counts = await query<{ total: string; completed: string }>(
     `SELECT COUNT(*) AS total,
             COUNT(*) FILTER (WHERE status = 'completed') AS completed
      FROM games WHERE player_id = $1`,

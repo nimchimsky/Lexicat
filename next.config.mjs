@@ -46,11 +46,19 @@ const nextConfig = {
     return [
       ...base,
       {
-        // Els SVG del mapa porten contingut versionat al nom de fitxer:
-        // cache immutable, estalviem el revalidatge dels ~425 KB.
-        source: "/mapa/:path*",
+        // Només fitxers SOTA /mapa/ (els SVG). `:path+` exigeix almenys un
+        // segment: amb `:path*` la regla també capturava la PÀGINA /mapa
+        // (el * casa amb zero segments) i li posava una caché immutable
+        // d'un any sobre contingut personalitzat per jugador.
+        source: "/mapa/:path+",
         headers: [
-          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+          // Els noms de fitxer NO porten versió ni hash (paisos-catalans-100.svg):
+          // res d'immutable. Un max-age curt amb revalidació en fons evita que
+          // una retoc del mapa quedi invisible setmanes pels visitants antics.
+          {
+            key: "Cache-Control",
+            value: "public, max-age=86400, stale-while-revalidate=604800",
+          },
           ...securityHeaders.filter((h) => h.key !== "Strict-Transport-Security"),
         ],
       },

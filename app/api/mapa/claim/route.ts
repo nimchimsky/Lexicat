@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 
 /** Reclama una zona del mapa gastant una fitxa pendent. */
 export async function POST(req: Request) {
-  if (!rateLimit(`claim:${clientIp(req)}`, 60, 60 * 60 * 1000)) {
+  if (!await rateLimit(`claim:${clientIp(req)}`, 60, 60 * 60 * 1000)) {
     return NextResponse.json({ error: "Massa peticions" }, { status: 429 });
   }
   try {

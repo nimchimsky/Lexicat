@@ -24,8 +24,13 @@ export const PRIOR_SD = 0.624;
 export const THETA_BOUND = 6;
 export const NEWTON_MAX_ITER = 50;
 
-// Inestabilitat entre sessions (estudi previ, altre format de resposta).
-// SE total = sqrt(SE mesura² + INSTABILITY_SE²)
+/**
+ * PROVISIONAL: inestabilitat entre sessions de l'estudi previ — altre format
+ * de resposta, retest immediat i mostra autoseleccionada. Els IC95 que ensenyen
+ * portada, resultats i rànquings depenen directament d'aquest valor. Reestimar
+ * amb jugadors recurrents propis tan aviat com n'hi hagi i bumpar
+ * calibration_version (DUBTES §3).
+ */
 export const INSTABILITY_SE = 0.278;
 
 // -----------------------------------------------------------------------
@@ -136,6 +141,14 @@ export const KILIAN_MULTIPLIER_CAP = 3;
 export const MIN_RT_MS = 200;
 /** Fracció de respostes precipitades que marca la partida com a sospitosa. */
 export const FAST_GUESS_GAME_RATIO = 0.2;
+
+/**
+ * Marge del servidor entre servir un estímul i presentar-lo al client:
+ * latència de xarxa + renderització (+ finestra de feedback del prefetch de
+ * Kilian). El temps real mai pot ser superior al temps de paret del servidor
+ * menys aquest marge; amb menys tolerància es castigarien connexions lentes.
+ */
+export const SERVE_OVERHEAD_MS = 1500;
 
 /** Una partida in_progress amb l'última activitat més vella que això s'abandona. */
 export const ABANDON_AFTER_MS = 24 * 60 * 60 * 1000;

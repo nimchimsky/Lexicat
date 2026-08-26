@@ -5,11 +5,19 @@
 
 /** L'estímul SEMPRE en una sola línia; «l·l» s'envolta d'aire per llegir-se bé.
  *  Les formes llargues (≥10 caràcters) encoixen una mica per no desbordar un
- *  mòbil estret: el banc arriba a 12. */
+ *  mòbil estret: el banc arriba a 12.
+ *
+ *  La paraula s'anuncia per regió viva cada cop que canvia: sense això, un
+ *  lector de pantalla mai sap quina paraula toca (a Kilian, amb 5 segons per
+ *  ítem, el mode és directament injugable). És el mateix patró del compte
+ *  enrere de la barra. */
 export function Stimulus({ text }: { text: string }) {
   const parts = text.split(/(l·l)/g);
   return (
     <span className={`stimulus-text${text.length >= 10 ? " long" : ""}`}>
+      <span role="status" aria-live="assertive" className="visually-hidden">
+        {text}
+      </span>
       {parts.length === 1
         ? text
         : parts.map((p, i) =>

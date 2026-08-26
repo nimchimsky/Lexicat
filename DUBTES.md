@@ -96,9 +96,9 @@ diccionaris gratuïts (Apertium, potser).
 fonts lliures per afegir-hi una segona referència enllaçada o contingut lliure;
 cal verificar-ne la llicència exacta ABANS de mostrar qualsevol text.
 
-## EXPLICAT · 6. Què són els rànquings 1 i 2
+## RESOLT · 6. Què són els rànquings 1 i 2 (tancat el 25/08/2026)
 
-Són les dues taules de «millor partida»:
+Eren les dues taules de «millor partida»:
 
 - **Millors partides · encerts**: quantes de les 100 has encertat. És el
   rànquing més defensable: amb els estrats, totes les partides són equivalents.
@@ -106,12 +106,11 @@ Són les dues taules de «millor partida»:
   segons la seva dificultat (les rares valen més) i acceptar pseudoparaules
   resta. Vol distingir qui sap paraules difícils de qui encerta fàcils.
 
-El problema mesurat: correlacionen 0,997 — ordenen pràcticament idèntic. Per
-això a la UI ara porten noms clars i la nota de correlació. **Decisió pendent
-del Roger:** mantenir les dues, fusionar-les en una, o deixar només «encerts»
-com a partida individual. La meva recomanació: deixar només «encerts» com a
-taula de millor partida, i reservar el «lexicó» per al rànquing general (on ja
-hi és, amb interval), que és on té sentit diferenciar.
+El problema mesurat: correlacionen 0,997 — ordenen pràcticament idèntic: són
+un de sol. **Decisió aplicada** (la recomanació ja escrita): queda només
+«encerts» com a taula de millor partida, i el «lexicó» es reservar per al
+rànquing general (on ja hi és, amb interval), que és on té sentit diferenciar.
+El tauler «Millors partides · lexicó» ha sortit de /ranquings i de l'API.
 
 ## TANCAT · 7. Contracció del MAP
 
@@ -145,7 +144,7 @@ GitHub + Vercel + Neon; **convidats han de poder jugar**.
    abans de promocionar el desplegament.
 
 1. Neon: crear projecte → copiar la cadena `DATABASE_URL` (pooler).
-2. Vercel: importar repo GitHub; env vars `DATABASE_URL`, `AUTH_SECRET`,
+2. Vercel: importar repo GitHub; env vars `DATABASE_URL`,
    `RESEND_API_KEY` (opcional), `MAIL_FROM`.
 3. Migracions + ingesta: executar-los una vegada apuntant `DATABASE_URL` a Neon
    (`npm run db:setup` en local amb la cadena de Neon). El CSV d'origen ha de

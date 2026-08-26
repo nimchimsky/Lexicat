@@ -26,6 +26,7 @@ import {
   KILIAN_GRACE_MS,
   KILIAN_YES_CONFIDENCE,
   KILIAN_NO_CONFIDENCE,
+  SERVE_OVERHEAD_MS,
 } from "../config";
 import {
   kilianMultiplier,
@@ -86,6 +87,8 @@ export async function startGame(
     if (player.rowCount === 0) throw new HttpError(404, "Jugador no trobat");
 
     // Qualsevol partida anterior en curs queda abandonada en començar una de nova.
+    // Raó 'nova_partida': a les dades ha de ser distingible d'un abandonament
+    // explícit ('usuari') — començar-ne una altra no és marxar.
     const open = await client.query<{ id: string }>(
       `SELECT id FROM games WHERE player_id = $1 AND status = 'in_progress' FOR UPDATE`,
       [playerId]
@@ -93,7 +96,7 @@ export async function startGame(
     for (const row of open.rows) {
       await client.query(
         `UPDATE games
-         SET status = 'abandoned', finished_at = now(), abandoned_reason = 'usuari',
+         SET status = 'abandoned', finished_at = now(), abandoned_reason = 'nova_partida',
              abandoned_at_position = COALESCE((SELECT MAX(position_in_game) FROM responses r WHERE r.game_id = $1), 0)
          WHERE id = $1`,
         [row.id]
@@ -236,6 +239,12 @@ export async function getOpenGame(playerId: string): Promise<GameState | null> {
 /**
  * Serveix l'estímul de la posició demanada. MAI conté is_word ni item_id:
  * només la forma en minúscules i la posició.
+ *
+ * UNA sola consulta fa les tres coses (abans eren tres anades i tornades per
+ * ítem): llegeix la forma, marca served_at — el punt de referència del
+ * servidor per acotar els temps declarats pel client a submitResponse — i
+ * registra l'exposició. served_at és COALESCE: un reintento del mateix ítem
+ * mai no mou el moment de servei cap endavant.
  */
 export async function serveItem(
   playerId: string,
@@ -265,34 +274,32 @@ export async function serveItem(
   }
 
   const item = await query<{ form: string }>(
-    `SELECT i.form
-     FROM game_items gi JOIN items i ON i.item_id = gi.item_id
-     WHERE gi.game_id = $1 AND gi.position = $2`,
-    [gameId, position]
+    `WITH gi_row AS (
+       UPDATE game_items gi
+       SET served_at = COALESCE(gi.served_at, now())
+       FROM items i
+       WHERE gi.game_id = $1 AND gi.position = $2 AND gi.item_id = i.item_id
+       RETURNING i.form, gi.item_id
+     ), exp AS (
+       INSERT INTO item_exposure (player_id, item_id, last_game_id, last_game_index, times_seen)
+       SELECT $3, r.item_id, $1, $4, 1 FROM gi_row r
+       ON CONFLICT (player_id, item_id) DO UPDATE
+       SET last_game_id = EXCLUDED.last_game_id,
+           last_game_index = EXCLUDED.last_game_index,
+           last_seen_at = CASE
+             WHEN item_exposure.last_game_id = EXCLUDED.last_game_id THEN item_exposure.last_seen_at
+             ELSE now()
+           END,
+           times_seen = CASE
+             WHEN item_exposure.last_game_id = EXCLUDED.last_game_id THEN item_exposure.times_seen
+             ELSE item_exposure.times_seen + 1
+           END
+       RETURNING item_id
+     )
+     SELECT form FROM gi_row`,
+    [gameId, position, playerId, g.rows[0].player_game_index]
   );
   if (item.rowCount === 0) throw new HttpError(404, "Posició no trobada");
-
-  // L'exposició es registra quan es serveix: és el que sosté el refredament.
-  const itemIdRow = await query<{ item_id: number }>(
-    `SELECT item_id FROM game_items WHERE game_id = $1 AND position = $2`,
-    [gameId, position]
-  );
-  await query(
-    `INSERT INTO item_exposure (player_id, item_id, last_game_id, last_game_index, times_seen)
-     VALUES ($1, $2, $3, $4, 1)
-     ON CONFLICT (player_id, item_id) DO UPDATE
-     SET last_game_id = EXCLUDED.last_game_id,
-         last_game_index = EXCLUDED.last_game_index,
-         last_seen_at = CASE
-           WHEN item_exposure.last_game_id = EXCLUDED.last_game_id THEN item_exposure.last_seen_at
-           ELSE now()
-         END,
-         times_seen = CASE
-           WHEN item_exposure.last_game_id = EXCLUDED.last_game_id THEN item_exposure.times_seen
-           ELSE item_exposure.times_seen + 1
-         END`,
-    [playerId, itemIdRow.rows[0].item_id, gameId, g.rows[0].player_game_index]
-  );
 
   return { position, stimulus: item.rows[0].form, totalItems: GAME_LENGTH };
 }
@@ -387,8 +394,17 @@ export async function submitResponse(
       throw new HttpError(409, `Posició fora d'ordre: esperada ${expected}, rebuda ${input.position}`);
     }
 
-    const gi = await client.query<{ item_id: number; is_word: boolean; stratum_id: number }>(
-      `SELECT item_id, is_word, stratum_id FROM game_items WHERE game_id = $1 AND position = $2`,
+    const gi = await client.query<{
+      item_id: number; is_word: boolean; stratum_id: number;
+      /** Temps de paret del servidor des que es va servir l'ítem (ms), o NULL
+       *  en partides anteriors a served_at. */
+      server_elapsed_ms: number | null;
+    }>(
+      `SELECT item_id, is_word, stratum_id,
+              CASE WHEN served_at IS NULL THEN NULL
+                   ELSE GREATEST(0, EXTRACT(EPOCH FROM (now() - served_at)) * 1000)::int
+              END AS server_elapsed_ms
+       FROM game_items WHERE game_id = $1 AND position = $2`,
       [input.gameId, input.position]
     );
     if (gi.rowCount === 0) throw new HttpError(404, "Ítem no servit en aquesta posició");
@@ -400,6 +416,9 @@ export async function submitResponse(
     let points: number | null = null;
     let streakAfter: number | null = null;
     let multiplier: number | null = null;
+    /** RT acotat pel rellotge del servidor: és el que s'emmagatzema i el que
+     *  alimenta suspect_fast. */
+    let effectiveRt = responseTimeMs;
 
     if (isKillian) {
       responseKind = input.kind === "timeout" ? "timeout" : "answer";
@@ -413,7 +432,18 @@ export async function submitResponse(
       // El servidor retalla SEMPRE al seu rang (barra + marge de gràcia) i mai
       // rebuja per llarg: un timeout automàtic després d'una pestanya amagada
       // ha de registrar-se com un timeout normal, no petar amb un 400.
-      elapsedMs = Math.min(rawElapsed, KILIAN_BAR_MS + KILIAN_GRACE_MS);
+      let effElapsed = Math.min(rawElapsed, KILIAN_BAR_MS + KILIAN_GRACE_MS);
+      // Acotament pel rellotge del servidor (served_at): l'estímul no s'ha
+      // pogut veure ABANS de servir-se (sostre) ni el temps real pot haver
+      // estat molt inferior al temps de paret menys la tolerància de xarxa i
+      // render (sòl). Sense served_at (partides velles), només retalla.
+      const serverMs = giRow.server_elapsed_ms;
+      if (serverMs != null) {
+        effElapsed = Math.min(effElapsed, Math.max(serverMs, SERVE_OVERHEAD_MS));
+        const floorMs = Math.max(serverMs - SERVE_OVERHEAD_MS, 0);
+        if (floorMs > effElapsed) effElapsed = Math.min(floorMs, KILIAN_BAR_MS + KILIAN_GRACE_MS);
+      }
+      elapsedMs = effElapsed;
 
       const saidYes = input.choice === "yes";
       const isCorrect = responseKind === "answer" && saidYes === giRow.is_word;
@@ -448,6 +478,17 @@ export async function submitResponse(
         throw new HttpError(400, "confiança fora de [0,1]");
       }
       confidence = input.confidence;
+
+      // Mateix acotament pel rellotge del servidor (served_at): un RT declarat
+      // molt per sota del temps de paret només és possible amb un client
+      // modificat, i cap RT no pot superar el temps de paret menys tolerància.
+      const serverMs = giRow.server_elapsed_ms;
+      if (effectiveRt !== null && serverMs != null) {
+        let rt = Math.min(effectiveRt, Math.max(serverMs, SERVE_OVERHEAD_MS));
+        const floorMs = Math.max(serverMs - SERVE_OVERHEAD_MS, 0);
+        if (floorMs > rt) rt = floorMs;
+        effectiveRt = rt;
+      }
     }
 
     // Desempat coherent amb tot el sistema (pompeu): confiança exactament
@@ -482,13 +523,13 @@ export async function submitResponse(
         game.slider_steps,
         isCorrectStored,
         !isKillian && confidence === 0.5,
-        responseTimeMs !== null && responseTimeMs < MIN_RT_MS,
+        effectiveRt !== null && effectiveRt < MIN_RT_MS,
         VERSIONS.itemBank,
         VERSIONS.referenceCorpus,
         VERSIONS.calibration,
         game.scoring_version,
         isKillian ? null : timeToFirstInputMs,
-        isKillian ? elapsedMs : responseTimeMs,
+        isKillian ? elapsedMs : effectiveRt,
         isKillian ? null : nAdjustments,
         deviceClass ?? game.device_class,
         game.player_game_index - 1,

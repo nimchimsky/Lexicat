@@ -7,7 +7,7 @@ import { rateLimit, clientIp } from "@/lib/server/ratelimit";
 export const runtime = "nodejs";
 
 export async function GET(req: Request) {
-  if (!rateLimit(`state:${clientIp(req)}`, 600, 60 * 60 * 1000)) {
+  if (!await rateLimit(`state:${clientIp(req)}`, 600, 60 * 60 * 1000)) {
     return NextResponse.json({ error: "Massa peticions" }, { status: 429 });
   }
   try {

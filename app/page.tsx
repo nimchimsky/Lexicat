@@ -35,8 +35,10 @@ function fmt(x: number, digits = 1): string {
 
 export default async function Home() {
   const player = await currentPlayer();
-  const summary = player ? await getPlayerSummary(player.id) : null;
-  const mapa = player ? await getMapaView(player.id) : null;
+  // En paral·lel, com a /mapa: dues consultes en sèrie només per estètica no.
+  const [summary, mapa] = player
+    ? await Promise.all([getPlayerSummary(player.id), getMapaView(player.id)])
+    : [null, null];
 
   const mapaCta = mapa
     ? mapa.completed

@@ -224,6 +224,21 @@ function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+/**
+ * Redueix la precisió dels números del path data (l'equivalent d'un passat
+ * d'SVGO amb floatPrecision: 1). El viewBox és ~3121×5016: les coordenades
+ * del paquet porten 3 decimals — mil vegades més fina que un píxel. Un
+ * decimal manté el mapa visualment idèntic i treu més de la meitat del pes.
+ */
+function roundPathPrecision(d: string, digits = 1): string {
+  return d.replace(/-?\d*\.?\d+(?:[eE][-+]?\d+)?/g, (num) => {
+    const rounded = Number(num).toFixed(digits);
+    // "10" queda "10"; "12.0" → "12"; "0.30" → "0.3"
+    if (!rounded.includes(".")) return rounded;
+    return rounded.replace(/0+$/, "").replace(/\.$/, "");
+  });
+}
+
 interface Placement {
   region: RegionPaths;
   matrix: Matrix;
@@ -384,12 +399,12 @@ export function buildCompactSvg(): string {
     const r = p.region;
     parts.push(
       `<g id="${esc(r.id)}" class="lexic-region" data-region-id="${esc(r.id)}" data-name="${esc(r.name)}" data-territory="${esc(r.territory)}" data-kind="${esc(kindOf(r.id))}" tabindex="0" role="button" aria-label="${esc(r.name)}" transform="${matrixAttr(p.matrix)}"><title>${esc(r.name)}</title>` +
-        r.shapes
-          .map(
-            (s) =>
-              `<path class="region-shape" d="${s.d}"${s.transform ? ` transform="${esc(s.transform)}"` : ""}/>`
-          )
-          .join("") +
+      r.shapes
+        .map(
+          (s) =>
+            `<path class="region-shape" d="${roundPathPrecision(s.d)}"${s.transform ? ` transform="${esc(s.transform)}"` : ""}/>`
+        )
+        .join("") +
         `</g>`
     );
   }

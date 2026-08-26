@@ -129,8 +129,9 @@ export async function redeemMagicToken(token: string): Promise<{ playerId: strin
 
 /**
  * Sessió de CONVIDAT: jugador sense correu amb identitat persistent a la
- * galeta (1 any). Pot jugar tot, entrar als rànquings i, si més tard entra
- * amb correu, conservar tot l'historial (redeemMagicToken fa l'upgrade).
+ * galeta (180 dies, SESSION_TTL_MS). Pot jugar tot, entrar als rànquings i,
+ * si més tard entra amb correu, conservar tot l'historial (redeemMagicToken
+ * fa l'upgrade).
  */
 export async function createGuestSession(): Promise<{ playerId: string }> {
   const existing = await currentPlayer();
@@ -210,11 +211,13 @@ export async function purgeExpiredAuthArtifacts(): Promise<void> {
 }
 
 /**
- * Eliminació GDPR: la fila del jugador queda anonimitzada (correu i sobrenom
- * fora), les respostes ja entrada al calibratge es conserven deslligades de
- * qualsevol persona identificable. Tot en una transacció: una caiguda a mig
- * camí mai deixa un compte mig anonimitzat. El bloqueig del jugador impedeix
- * que una partida nova arrenqui mentre s'esborra.
+ * Eliminació GDPR: la fila del jugador queda pseudonimitzada (correu i sobrenom
+ * fora) i les respostes es conserven lligades només a l'identificador opac —
+ * és el que el text de /privadesa explica. Les dades derivades de la identitat
+ * (progrés del mapa, memòria d'exposicions, standings i perfil) s'esborren.
+ * Tot en una transacció: una caiguda a mig camí mai deixa un compte mig
+ * anonimitzat. El bloqueig del jugador impedeix que una partida nova arrenqui
+ * mentre s'esborra.
  */
 export async function deleteAccount(playerId: string): Promise<void> {
   const client = await getPool().connect();
@@ -232,6 +235,10 @@ export async function deleteAccount(playerId: string): Promise<void> {
     );
     await client.query(`DELETE FROM player_standings WHERE player_id = $1`, [playerId]);
     await client.query(`DELETE FROM player_profiles WHERE player_id = $1`, [playerId]);
+    // Dades derivades d'una identitat que s'està pseudonimitzant: el mapa
+    // guanyat i la memòria de refredament no tenen sentit sense el compte.
+    await client.query(`DELETE FROM player_regions WHERE player_id = $1`, [playerId]);
+    await client.query(`DELETE FROM item_exposure WHERE player_id = $1`, [playerId]);
     await client.query(
       `UPDATE players SET
          email = NULL,

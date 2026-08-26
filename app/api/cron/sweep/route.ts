@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sweepAbandonedGames } from "@/lib/server/game";
 import { purgeExpiredAuthArtifacts } from "@/lib/server/auth";
+import { purgeExpiredRateLimitBuckets } from "@/lib/server/ratelimit";
 import { apiErrorResponse } from "@/lib/server/apiError";
 
 export const runtime = "nodejs";
@@ -31,6 +32,7 @@ async function run(req: Request): Promise<NextResponse> {
   try {
     await sweepAbandonedGames();
     await purgeExpiredAuthArtifacts();
+    await purgeExpiredRateLimitBuckets();
     return NextResponse.json({ ok: true });
   } catch (e) {
     return apiErrorResponse(e);

@@ -11,7 +11,7 @@ export const runtime = "nodejs";
 export async function POST(req: Request) {
   // Crear partida és carregant (selecció sencera en transacció): limitat per
   // IP per damunt del ritme de qualsevol jugador humà.
-  if (!rateLimit(`start:${clientIp(req)}`, 60, 60 * 60 * 1000)) {
+  if (!await rateLimit(`start:${clientIp(req)}`, 60, 60 * 60 * 1000)) {
     return NextResponse.json({ error: "Massa partides. Descansa un moment." }, { status: 429 });
   }
   try {

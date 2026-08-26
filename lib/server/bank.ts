@@ -22,18 +22,20 @@ interface CachedBank {
   lexicon: LexiconReference;
   percentiles: PercentileTable;
   range: BankRange;
-  loadedAt: number;
 }
 
 let cache: CachedBank | undefined;
 
-/** Invalida la caché (tests / post-ingesta). */
+/** Invalida la caché (tests / post-ingesta). El banc és immutable per versió
+ *  de disseny: re-ingestar exigeix bumpar itemBank, així que no cal cap TTL —
+ *  cada procés carrega el banc UNA vegada i ja no torna a pagar la consulta
+ *  sencera (a Vercel, cada cold start paga exactament una). */
 export function invalidateBankCache(): void {
   cache = undefined;
 }
 
 export async function loadBank(): Promise<CachedBank> {
-  if (cache && Date.now() - cache.loadedAt < 60_000) return cache;
+  if (cache) return cache;
 
   const itemsRes = await query<{
     item_id: number;
@@ -100,7 +102,6 @@ export async function loadBank(): Promise<CachedBank> {
     lexicon,
     percentiles: new PercentileTable(pop.bins, { version: pop.version, n: Number(pop.n) }),
     range: { bMin: bankVer.rows[0].b_min, bMax: bankVer.rows[0].b_max },
-    loadedAt: Date.now(),
   };
   return cache;
 }

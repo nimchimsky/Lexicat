@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 
 /** Estat del mapa del jugador: progrés derivat + zones reclamades. */
 export async function GET(req: Request) {
-  if (!rateLimit(`mapa:${clientIp(req)}`, 120, 60 * 60 * 1000)) {
+  if (!await rateLimit(`mapa:${clientIp(req)}`, 120, 60 * 60 * 1000)) {
     return NextResponse.json({ error: "Massa peticions" }, { status: 429 });
   }
   try {

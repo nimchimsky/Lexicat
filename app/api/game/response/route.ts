@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   // 100 respostes per partida i marge de sobra: cap humà no arriba mai.
-  if (!rateLimit(`resp:${clientIp(req)}`, 3000, 60 * 60 * 1000)) {
+  if (!await rateLimit(`resp:${clientIp(req)}`, 3000, 60 * 60 * 1000)) {
     return NextResponse.json({ error: "Massa peticions" }, { status: 429 });
   }
   try {

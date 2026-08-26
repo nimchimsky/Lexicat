@@ -26,7 +26,7 @@ function baseUrl(req: Request): string | null {
 
 export async function POST(req: Request) {
   const ip = clientIp(req);
-  if (!rateLimit(`link:${ip}`, 10, 60 * 60 * 1000)) {
+  if (!await rateLimit(`link:${ip}`, 10, 60 * 60 * 1000)) {
     return NextResponse.json({ error: "Massa intents. Torna-ho a provar més tard." }, { status: 429 });
   }
   let email: unknown;
