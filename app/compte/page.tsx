@@ -51,7 +51,20 @@ function gameStatus(game: ProfileRecentGame): string {
 function gameResult(game: ProfileRecentGame): string {
   if (game.status !== "completed") return "—";
   if (game.mode === "pompeu") return `${number(game.nCorrect)}/100 · ${number(game.score)} punts`;
+  if (game.mode === "classic") return `${number(game.score)}/100 · ${number(game.nCorrect)} encerts`;
   return `${number(game.score)} punts · ratxa ${number(game.bestStreak)}`;
+}
+
+function gameModeName(mode: ProfileRecentGame["mode"]): string {
+  if (mode === "pompeu") return "Pompeu";
+  if (mode === "classic") return "Clàssic";
+  return "Kilian";
+}
+
+function gameModeHref(mode: ProfileRecentGame["mode"]): string {
+  if (mode === "pompeu") return "/joc";
+  if (mode === "classic") return "/classic";
+  return "/killian";
 }
 
 export default async function Compte({
@@ -68,6 +81,7 @@ export default async function Compte({
   const view = await getProfileView(player.id, seenKind, Number.isFinite(parsedPage) ? parsedPage : 1);
   const pompeu = modeStats(view.stats, "pompeu");
   const killian = modeStats(view.stats, "killian");
+  const classic = modeStats(view.stats, "classic");
 
   const listHref = (kind: "paraules" | "pseudoparaules", page = 1) =>
     `/compte?vistos=${kind}${page > 1 ? `&pagina=${page}` : ""}`;
@@ -128,6 +142,18 @@ export default async function Compte({
             </div>
             <p className="muted small">Iniciades: {killian.gamesStarted}. Els rànquings dels modes són independents.</p>
           </article>
+
+          <article className="card profile-mode-card">
+            <p className="eyebrow">Mode</p>
+            <h3>Clàssic</h3>
+            <div className="statgrid">
+              <div className="stat"><b>{classic.gamesCompleted}</b><span>partides acabades</span></div>
+              <div className="stat"><b>{number(classic.meanScore, 1)}</b><span>puntuació mitjana</span></div>
+              <div className="stat"><b>{number(classic.bestScore)}</b><span>millor puntuació</span></div>
+              <div className="stat"><b>{number(classic.meanHits, 1)}</b><span>mitjana d’encerts</span></div>
+            </div>
+            <p className="muted small">Iniciades: {classic.gamesStarted}. Puntuació equilibrada sobre 100, sense temps.</p>
+          </article>
         </div>
       </section>
 
@@ -145,11 +171,11 @@ export default async function Compte({
                 {view.recentGames.map((game) => (
                   <tr key={game.gameId}>
                     <td>{game.status === "completed" ? <Link href={`/resultats/${game.gameId}`}>{date(game.startedAt)}</Link> : date(game.startedAt)}</td>
-                    <td>{game.mode === "pompeu" ? "Pompeu" : "Kilian"}</td>
+                    <td>{gameModeName(game.mode)}</td>
                     <td>
                       {game.status === "in_progress" ? (
                         // Reprendre és un clic: /joc i /killian ja fan el resume.
-                        <Link href={game.mode === "pompeu" ? "/joc" : "/killian"} className="resume-link">
+                        <Link href={gameModeHref(game.mode)} className="resume-link">
                           En curs · continua
                         </Link>
                       ) : (

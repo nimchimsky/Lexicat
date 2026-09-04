@@ -6,7 +6,7 @@ import { query } from "./db";
 import { HttpError } from "./http";
 import { loadBank } from "./bank";
 import { displayItemScore, pAssignedToCorrect } from "../psychometrics/scoring";
-import { SCORE_K, SCORING_EPSILON } from "../config";
+import { SCORE_K, SCORING_EPSILON, type GameMode } from "../config";
 import { getPlayerProfile, type PlayerProfile } from "./profile";
 
 export interface ResultItemRow {
@@ -39,7 +39,7 @@ export interface GameResultsView {
   gameId: string;
   finishedAt: string | null;
   qualityFlag: string | null;
-  mode: "pompeu" | "killian";
+  mode: GameMode;
   summary: {
     nCorrect: number;
     totalItems: number;
@@ -74,7 +74,7 @@ export function diecUrl(form: string): string {
 export async function getGameResultsView(gameId: string, playerId: string): Promise<GameResultsView> {
   const gameRes = await query<{
     player_id: string; status: string; finished_at: Date | null; quality_flag: string | null;
-    reference_corpus_version: string; mode: "pompeu" | "killian";
+    reference_corpus_version: string; mode: GameMode;
   }>(
     `SELECT player_id, status, finished_at, quality_flag, reference_corpus_version, mode
      FROM games WHERE id = $1`,
@@ -103,6 +103,7 @@ export async function getGameResultsView(gameId: string, playerId: string): Prom
   );
 
   if (g.mode === "killian") return kilianResultsView(g, gameId, rowsRes.rows);
+  if (g.mode === "classic") return classicResultsView(g, gameId, rowsRes.rows);
   return pompeuResultsView(g, gameId, rowsRes.rows);
 }
 
@@ -287,6 +288,63 @@ async function kilianResultsView(
       medianElapsedMs: medianElapsed,
       fastest,
     },
+  };
+}
+
+async function classicResultsView(
+  g: { finished_at: Date | null; quality_flag: string | null; reference_corpus_version: string },
+  gameId: string,
+  rawRows: Array<{
+    position: number; form: string; confidence: number | null; is_word: boolean;
+    is_correct: boolean; fifty_fifty: boolean; response_time_ms: number | null;
+    points: number | null; response_kind: string | null; elapsed_ms: number | null;
+    b: number;
+  }>
+): Promise<GameResultsView> {
+  const resRes = await query<{
+    n_responses: number; n_correct: number; n_false_alarms: number; score: number;
+  }>(
+    `SELECT n_responses, n_correct, n_false_alarms, score
+     FROM game_results WHERE game_id = $1`,
+    [gameId]
+  );
+  if (resRes.rowCount === 0) throw new HttpError(409, "Resultats no calculats");
+  const r = resRes.rows[0];
+
+  const rows = baseRows(rawRows);
+  const discoveries = rows
+    .filter((x) => x.isWord && !x.isCorrect)
+    .sort((a, b) => a.position - b.position);
+  const falseAlarms = rows
+    .filter((x) => !x.isWord && !x.isCorrect)
+    .sort((a, b) => a.position - b.position);
+  const rest = rows.filter((x) => x.isCorrect).sort((a, b) => a.position - b.position);
+
+  return {
+    gameId,
+    finishedAt: g.finished_at ? new Date(g.finished_at).toISOString() : null,
+    qualityFlag: g.quality_flag,
+    mode: "classic",
+    summary: {
+      nCorrect: r.n_correct,
+      totalItems: r.n_responses,
+      pctLexicon: 0,
+      pctLo: 0,
+      pctHi: 0,
+      percentile: 0,
+      dPrime: 0,
+      criterion: 0,
+      dPrimeCeiling: 0,
+      nFalseAlarms: r.n_false_alarms,
+      nFiftyFifty: 0,
+      score: r.score,
+      theta: 0,
+      seTheta: 0,
+    },
+    discoveries,
+    falseAlarms,
+    rest,
+    referenceCorpusVersion: g.reference_corpus_version,
   };
 }
 
@@ -526,6 +584,109 @@ export async function getKilianRankings(
   return mapped;
 }
 
+export interface ClassicRankingRow {
+  rank: number;
+  nickname: string | null;
+  score: number;
+  nCorrect: number;
+  nFalseAlarms: number;
+  isMe?: boolean;
+}
+
+interface ClassicBoardRowInternal {
+  player_id: string;
+  nickname: string | null;
+  score: number;
+  n_correct: number;
+  n_false_alarms: number;
+}
+
+async function classicBoardRows(): Promise<ClassicBoardRowInternal[]> {
+  const res = await query<ClassicBoardRowInternal>(
+    `SELECT best.player_id, p.nickname, best.score::int AS score,
+            best.n_correct::int AS n_correct, best.n_false_alarms::int AS n_false_alarms
+     FROM (
+       SELECT DISTINCT ON (g.player_id)
+              g.player_id, gr.score, gr.n_correct, gr.n_false_alarms,
+              g.finished_at, g.id AS game_id
+       FROM games g
+       JOIN players p ON p.id = g.player_id
+       JOIN game_results gr ON gr.game_id = g.id
+       WHERE ${ELIGIBLE_GAME_SQL} AND p.deleted_at IS NULL AND g.mode = 'classic'
+       ORDER BY g.player_id, gr.score DESC, gr.n_correct DESC, gr.n_false_alarms ASC,
+                g.finished_at ASC, g.id ASC
+     ) best
+     JOIN players p ON p.id = best.player_id
+     ORDER BY best.score DESC, best.n_correct DESC, best.n_false_alarms ASC,
+              best.finished_at ASC, best.player_id ASC
+     LIMIT ${RANKING_TOP_N}`
+  );
+  return res.rows;
+}
+
+async function classicSelfRow(
+  playerId: string
+): Promise<(ClassicBoardRowInternal & { rank: number }) | null> {
+  const res = await query<ClassicBoardRowInternal & { rank: number }>(
+    `WITH best AS (
+       SELECT DISTINCT ON (g.player_id)
+              g.player_id, gr.score, gr.n_correct, gr.n_false_alarms,
+              g.finished_at, g.id AS game_id
+       FROM games g
+       JOIN players p ON p.id = g.player_id
+       JOIN game_results gr ON gr.game_id = g.id
+       WHERE ${ELIGIBLE_GAME_SQL} AND p.deleted_at IS NULL AND g.mode = 'classic'
+       ORDER BY g.player_id, gr.score DESC, gr.n_correct DESC, gr.n_false_alarms ASC,
+                g.finished_at ASC, g.id ASC
+     )
+     SELECT m.player_id, p.nickname, m.score::int AS score,
+            m.n_correct::int AS n_correct, m.n_false_alarms::int AS n_false_alarms,
+            (SELECT COUNT(*) + 1 FROM best o
+             WHERE o.score > m.score
+                OR (o.score = m.score AND o.n_correct > m.n_correct)
+                OR (o.score = m.score AND o.n_correct = m.n_correct
+                    AND o.n_false_alarms < m.n_false_alarms)
+                OR (o.score = m.score AND o.n_correct = m.n_correct
+                    AND o.n_false_alarms = m.n_false_alarms
+                    AND (o.finished_at, o.player_id) < (m.finished_at, m.player_id))
+            )::int AS rank
+     FROM best m
+     JOIN players p ON p.id = m.player_id
+     WHERE m.player_id = $1`,
+    [playerId]
+  );
+  return res.rows[0] ?? null;
+}
+
+/** Millor partida Clàssic per jugador; mai es barreja amb els altres modes. */
+export async function getClassicRankings(
+  playerId?: string | null
+): Promise<ClassicRankingRow[]> {
+  const rows = await withBoardCache("classic", classicBoardRows);
+  const mapped: ClassicRankingRow[] = rows.map((r, i) => ({
+    rank: i + 1,
+    nickname: r.nickname,
+    score: Number(r.score),
+    nCorrect: Number(r.n_correct),
+    nFalseAlarms: Number(r.n_false_alarms),
+    isMe: playerId != null && r.player_id === playerId,
+  }));
+  if (playerId && !mapped.some((r) => r.isMe)) {
+    const mine = await classicSelfRow(playerId);
+    if (mine) {
+      mapped.push({
+        rank: Number(mine.rank),
+        nickname: mine.nickname,
+        score: Number(mine.score),
+        nCorrect: Number(mine.n_correct),
+        nFalseAlarms: Number(mine.n_false_alarms),
+        isMe: true,
+      });
+    }
+  }
+  return mapped;
+}
+
 interface StandingRowInternal extends BoardRowInternal {
   n_games: number;
   lo: number;
@@ -649,7 +810,7 @@ export async function getRankings(playerId?: string | null) {
 }
 
 /** Hi ha alguna partida completada d'aquest mode? (per al tutorial de Kilian) */
-export async function hasCompletedGames(playerId: string, mode: "pompeu" | "killian" = "killian"): Promise<boolean> {
+export async function hasCompletedGames(playerId: string, mode: GameMode = "killian"): Promise<boolean> {
   const res = await query<{ n: string }>(
     `SELECT 1 AS n FROM games
      WHERE player_id = $1 AND mode = $2 AND status = 'completed'
@@ -691,7 +852,7 @@ export async function getPlayerSummary(playerId: string) {
 }
 
 export interface ProfileModeStats {
-  mode: "pompeu" | "killian";
+  mode: GameMode;
   gamesStarted: number;
   gamesCompleted: number;
   meanHits: number | null;
@@ -707,7 +868,7 @@ export interface ProfileModeStats {
 
 export interface ProfileRecentGame {
   gameId: string;
-  mode: "pompeu" | "killian";
+  mode: GameMode;
   status: "in_progress" | "completed" | "abandoned";
   startedAt: string;
   finishedAt: string | null;
@@ -747,7 +908,7 @@ export async function getProfileView(
   const [profile, statsRes, countsRes, seenItemsRes, seenTotalRes, recentRes] = await Promise.all([
     getPlayerProfile(playerId),
     query<{
-      mode: "pompeu" | "killian";
+      mode: GameMode;
       games_started: string;
       games_completed: string;
       mean_hits: number | null;
@@ -763,8 +924,8 @@ export async function getProfileView(
       `SELECT g.mode,
               COUNT(*)::int AS games_started,
               COUNT(*) FILTER (WHERE g.status = 'completed')::int AS games_completed,
-              AVG(gr.n_correct) FILTER (WHERE g.status = 'completed' AND g.mode = 'pompeu')::float AS mean_hits,
-              MAX(gr.n_correct) FILTER (WHERE g.status = 'completed' AND g.mode = 'pompeu')::int AS best_hits,
+              AVG(gr.n_correct) FILTER (WHERE g.status = 'completed' AND g.mode IN ('pompeu','classic'))::float AS mean_hits,
+              MAX(gr.n_correct) FILTER (WHERE g.status = 'completed' AND g.mode IN ('pompeu','classic'))::int AS best_hits,
               AVG(gr.score) FILTER (WHERE g.status = 'completed')::float AS mean_score,
               MAX(gr.score) FILTER (WHERE g.status = 'completed')::int AS best_score,
               MAX(gr.best_streak) FILTER (WHERE g.status = 'completed' AND g.mode = 'killian')::int AS best_streak,
@@ -803,7 +964,7 @@ export async function getProfileView(
     ),
     query<{
       id: string;
-      mode: "pompeu" | "killian";
+      mode: GameMode;
       status: "in_progress" | "completed" | "abandoned";
       started_at: Date;
       finished_at: Date | null;

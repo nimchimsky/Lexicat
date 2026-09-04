@@ -17,7 +17,8 @@ export async function POST(req: Request) {
   try {
     const player = await requirePlayer();
     const body = await req.json().catch(() => ({}));
-    const mode: GameMode = body?.mode === "killian" ? "killian" : "pompeu";
+    const mode: GameMode =
+      body?.mode === "killian" ? "killian" : body?.mode === "classic" ? "classic" : "pompeu";
     const game = await startGame(
       player.id,
       deviceClassFromUserAgent(req.headers.get("user-agent")),

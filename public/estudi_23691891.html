@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LEXIC.CAT · Què expliquen 64 milions de respostes?</title>
-<meta name="description" content="Descobertes sorprenents d'un gran experiment de vocabulari en català: paraules que neixen, memòria de pseudoparaules, edat, territori, hora del dia i pràctica.">
+<title>L'estudi original de Lexicat · 64 milions de respostes</title>
+<meta name="description" content="Com es va fer l'estudi original de Lexicat i què revelen 64,8 milions de decisions sobre el vocabulari català, l'edat, el territori i la pràctica.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -75,7 +75,9 @@ p{max-width:64ch;color:var(--tx2)}
 .jump-nav{display:none;gap:16px;margin-left:18px}
 .jump-nav a{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.12em;font-weight:700}
 .jump-nav a:hover{color:var(--tx);text-decoration:none}
-@media(min-width:760px){.jump-nav{display:flex}}
+.study-label{display:none}
+@media(min-width:600px){.study-label{display:inline}}
+@media(min-width:1100px){.jump-nav{display:flex}}
 .topbar a{color:var(--mut);font-size:13px;text-transform:uppercase;letter-spacing:.1em;font-weight:700}
 .topbar a:hover{color:var(--volt);text-decoration:none}
 
@@ -123,6 +125,19 @@ main>section,.split>*,.card{min-width:0}
 .finding{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:start;border:1px solid var(--line-strong);padding:16px;background:var(--s2)}
 .finding-mark{font:700 30px/.9 "Barlow Condensed",Impact,sans-serif;color:var(--volt);text-shadow:2px 2px 0 var(--senyera-r)}
 .finding p{font-size:14px}
+
+/* ---------- com es va fer ---------- */
+.method-list{list-style:none;counter-reset:method}
+.method-list li{counter-increment:method;display:grid;grid-template-columns:42px 1fr;gap:14px;padding:16px 0;align-items:start}
+.method-list li+li{border-top:1px solid var(--line)}
+.method-list li::before{content:"0" counter(method);font:700 24px/1 "Barlow Condensed",Impact,sans-serif;color:var(--volt);text-shadow:2px 2px 0 var(--senyera-r)}
+.method-list strong{display:block;color:var(--tx);margin-bottom:3px}
+.method-list p{font-size:14px}
+.reading-keys{display:grid;grid-template-columns:1fr;gap:1px;background:var(--line);border:1px solid var(--line);margin-top:24px}
+.reading-keys>div{background:var(--s1);padding:15px 16px}
+.reading-keys dt{font-size:11px;text-transform:uppercase;letter-spacing:.12em;font-weight:700;color:var(--volt);margin-bottom:5px}
+.reading-keys dd{font-size:14px;color:var(--tx2)}
+@media(min-width:720px){.reading-keys{grid-template-columns:repeat(3,1fr)}}
 
 /* ---------- botons ---------- */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;
@@ -241,15 +256,16 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:20px 0}
   <div class="topbar-in">
     <div class="brand-sq" aria-hidden="true"></div>
     <span class="wordmark">Lexic.cat</span>
-    <span class="micro" style="letter-spacing:.14em">Megaexperiment · 2019—2026</span>
+    <span class="micro study-label" style="letter-spacing:.14em">Estudi original · 2019—2026</span>
     <nav class="jump-nav" aria-label="Seccions principals">
+      <a href="#metode">Com es va fer</a>
       <a href="#joc">Prova</a>
       <a href="#genere">Paraules</a>
       <a href="#territori">Territori</a>
-      <a href="#absurd">Sorpreses</a>
+      <a href="#limits">Límits</a>
     </nav>
     <span class="spacer"></span>
-    <a href="https://lexic.cat" class="ext-arrow">Jugar</a>
+    <a href="https://lexic.cat" class="ext-arrow">Lexicat actual</a>
   </div>
 </div>
 
@@ -257,21 +273,65 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:20px 0}
 
 <!-- ================= HERO ================= -->
 <section class="hero" aria-labelledby="titol">
-  <div class="kicker"><span class="eyebrow">64.781.640 respostes després</span></div>
-  <h1 id="titol">El vocabulari et delata en menys de dos segons</h1>
+  <div class="kicker"><span class="eyebrow">L'estudi que va fer possible el Lexicat actual</span></div>
+  <h1 id="titol">Mig milió de partides per entendre el lèxic català</h1>
   <div class="filet" aria-hidden="true"></div>
-  <p class="lead">L'edat, el territori, la llengua de casa, les notícies del dia i fins i tot
-  haver jugat sis minuts abans deixen rastre en una decisió tan simple com dir «això és una paraula».
-  Aquestes són les històries més inesperades que va revelar el megaexperiment.</p>
+  <p class="lead">Entre el 2019 i el 2026, un experiment obert va demanar a milers de persones
+  que distingissin paraules catalanes de formes inventades. Cada partida completada aportava
+  120 decisions; juntes, expliquen com l'edat, el territori, la llengua de casa, el moment del dia
+  i la pràctica deixen rastre en el vocabulari.</p>
+
+  <div class="btn-row">
+    <a class="btn btn-primary" href="#metode">Entendre l'estudi</a>
+    <a class="btn btn-secondary" href="#joc">Provar la tasca</a>
+  </div>
 
   <div class="stats-grid">
     <div><div class="big-number tnum" data-count="64781640">0</div><div class="stat-label micro">Decisions lèxiques</div><div class="metric-note">cada resposta compta</div></div>
-    <div><div class="big-number tnum" data-count="539847">0</div><div class="stat-label micro">Sessions</div><div class="metric-note">120 ítems · 2019—2026</div></div>
+    <div><div class="big-number tnum" data-count="539847">0</div><div class="stat-label micro">Partides completes</div><div class="metric-note">120 decisions cadascuna</div></div>
     <div><div class="big-number tnum" data-count="71020">0</div><div class="stat-label micro">Ítems diferents</div><div class="metric-note">40.777 mots + 30.243 pseudoparaules</div></div>
     <div><div class="big-number tnum" data-count="1643">0</div><div class="stat-label micro">Mil·lisegons</div><div class="metric-note">mediana per decidir</div></div>
   </div>
 
-  <div class="finding"><div class="finding-mark">3,4</div><div><strong>Anys seguits responent, sense dormir.</strong><p>Si una sola persona encadenés les 64,8 milions de decisions al ritme medià de l'estudi, trigaria uns 3 anys i 4 mesos. Aquí en destil·lem les troballes que val la pena recordar.</p></div></div>
+  <div class="finding"><div class="finding-mark">120</div><div><strong>Una partida, no una persona.</strong><p>En aquesta pàgina, una «sessió» és una partida acabada de 120 decisions. Com que es podia repetir, 539.847 sessions no equivalen a 539.847 persones diferents.</p></div></div>
+</section>
+
+<!-- ================= COM ES VA FER ================= -->
+<section id="metode" aria-labelledby="metode-t">
+  <div class="split">
+    <div class="stack">
+      <span class="eyebrow">00 · Abans de mirar els resultats</span>
+      <h2 id="metode-t">De què parlem quan diem «l'estudi»?</h2>
+      <p class="section-intro">Era una prova en línia de <strong>decisió lèxica</strong>. No calia
+      definir cap mot: només decidir, tan espontàniament com fos possible, si una cadena de lletres
+      era una paraula catalana o una pseudoparaula inventada.</p>
+      <p>Cada partida barrejava <strong>84 paraules reals</strong> i <strong>36 pseudoparaules</strong>.
+      No hi havia compte enrere ni es deia la resposta correcta entre ítems. El sistema guardava
+      l'encert i el temps de reacció de cada decisió.</p>
+      <p><strong>El Lexicat actual no repeteix aquella prova tal qual.</strong> N'hereta el gran banc
+      d'ítems i la dificultat observada de cada forma, però ho converteix en partides de 100 decisions,
+      nous modes de joc i un seguiment que també permet comptar inicis i abandonaments.</p>
+      <div class="notice"><strong>Un límit important:</strong> només es desaven les partides que
+      arribaven al final. Per tant, podem descriure 539.847 partides completes, però no sabem quantes
+      persones les van començar i van abandonar abans de la decisió 120.</div>
+    </div>
+
+    <div class="card">
+      <h3>Una partida, pas a pas</h3>
+      <ol class="method-list">
+        <li><div><strong>Apareix una forma</strong><p>Pot ser un mot real, com <em>escalunya</em>, o una forma inventada que s'hi assembla.</p></div></li>
+        <li><div><strong>Tries entre dues respostes</strong><p>«Paraula» o «no paraula», sense cap pista ni feedback immediat.</p></div></li>
+        <li><div><strong>Es registren dues mesures</strong><p>Si la decisió és correcta i quants mil·lisegons has trigat a prendre-la.</p></div></li>
+        <li><div><strong>Les decisions s'agrupen</strong><p>Milions de respostes permeten veure patrons col·lectius que una partida sola no podria mostrar.</p></div></li>
+      </ol>
+    </div>
+  </div>
+
+  <dl class="reading-keys" aria-label="Tres claus per interpretar els resultats">
+    <div><dt>Sessió ≠ persona</dt><dd>Una mateixa persona podia jugar més d'una vegada.</dd></div>
+    <div><dt>Diferència ≠ causa</dt><dd>Els grups s'associen amb patrons; l'estudi no demostra per què apareixen.</dd></div>
+    <div><dt>Mediana ≠ mitjana</dt><dd>Fem servir el valor central perquè una pausa llarga no deformi els temps de tothom.</dd></div>
+  </dl>
 </section>
 
 <!-- ================= EL JOC (demo) ================= -->
@@ -685,7 +745,7 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:20px 0}
 </section>
 
 <!-- ================= PEU ================= -->
-<section style="gap:16px">
+<section id="limits" style="gap:16px">
   <div class="notice"><strong>Com llegir-ho.</strong> Són dades observacionals d'una mostra voluntària,
   no un cens de la població: mostren associacions agregades, no causes ni diagnòstics individuals.
   Els contrastos temporals de <em>pangolí</em> són descriptius, i el sexe és el registrat al qüestionari.

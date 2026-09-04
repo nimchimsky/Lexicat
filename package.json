@@ -2,6 +2,7 @@
   "name": "lexicat",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "open": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/open-dev.ps1",
@@ -18,12 +19,12 @@
     "db:lemmas": "tsx scripts/load-lemma-map.ts",
     "db:setup": "tsx scripts/migrate.ts && tsx scripts/ingest-item-bank.ts",
     "simulate": "tsx scripts/simulate.ts",
-    "test": "vitest run tests/psychometrics.test.ts tests/mapa.test.ts tests/killian.test.ts tests/graded.test.ts tests/profile.test.ts --configLoader native",
+    "test": "vitest run tests/psychometrics.test.ts tests/mapa.test.ts tests/killian.test.ts tests/classic.test.ts tests/graded.test.ts tests/profile.test.ts --configLoader native",
     "test:integration": "vitest run tests/integration.acceptance.test.ts --configLoader native"
   },
   "dependencies": {
     "dotenv": "^17.2.1",
-    "next": "^15.4.5",
+    "next": "^15.5.24",
     "pg": "^8.16.3",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
@@ -35,9 +36,12 @@
     "@types/react-dom": "^19.1.7",
     "embedded-postgres": "^17.10.0-beta.17",
     "eslint": "^9.33.0",
-    "eslint-config-next": "^15.4.5",
+    "eslint-config-next": "^15.5.24",
     "tsx": "^4.20.3",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"
+  },
+  "overrides": {
+    "postcss": "^8.5.26"
   }
 }

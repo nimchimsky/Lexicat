@@ -65,11 +65,9 @@ npx tsx scripts/exposure-report.ts [playerId]   # monitor d'exposició d'ítems
 CI: `.github/workflows/ci.yml` corre `typecheck` + `lint` + `test` a cada
 push i PR — res no es trenca en silenci.
 
-Nota per a Windows local: el test pesat de psicometria (simulacions MAP de
-~30 s en un sol fil) pot disparar de tant en tant un «Timeout calling
-onTaskUpdate» de Vitest que fa fallar la suite SENSE cap test vermell — és el
-flack conegut d'IPC de Vitest a Windows (`vitest.config.ts` ja corre amb un
-sol fork per minimitzar-lo). Torna'l a executar; al CI (Linux) no apareix.
+Nota per a Windows local: el test pesat de psicometria executa simulacions MAP
+llargues. `vitest.config.ts` el manté en un sol worker thread per limitar memòria
+i evitar els timeouts d'IPC que provoca el pool de processos de Vitest.
 
 La simulació comprova els criteris 4, 5, 7 i 8 del prompt: biaix de θ < 0,02,
 SE ≈ 0,238 / 0,274 / 0,342 (MAP), % del lexicó ≈ 65,2 / 78,1 / 87,1 i sostre de

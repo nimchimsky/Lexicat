@@ -1,7 +1,13 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { currentPlayer } from "@/lib/server/auth";
-import { getRankings, getKilianRankings, RANKING_TOP_N, type RankingRow } from "@/lib/server/views";
+import {
+  getRankings,
+  getKilianRankings,
+  getClassicRankings,
+  RANKING_TOP_N,
+  type RankingRow,
+} from "@/lib/server/views";
 
 export const dynamic = "force-dynamic";
 
@@ -89,13 +95,16 @@ export default async function Ranquings({
 }) {
   const { mode } = await searchParams;
   const kilian = mode === "kilian";
+  const classic = mode === "classic";
   const player = await currentPlayer();
 
   let error: string | null = null;
   let boards: Awaited<ReturnType<typeof getRankings>> | null = null;
   let kilianBoard: Awaited<ReturnType<typeof getKilianRankings>> | null = null;
+  let classicBoard: Awaited<ReturnType<typeof getClassicRankings>> | null = null;
   try {
-    if (kilian) kilianBoard = await getKilianRankings(player?.id ?? null);
+    if (classic) classicBoard = await getClassicRankings(player?.id ?? null);
+    else if (kilian) kilianBoard = await getKilianRankings(player?.id ?? null);
     else boards = await getRankings(player?.id ?? null);
   } catch {
     error = "Els rànquings no són disponibles ara mateix (banc no ingestat?).";
@@ -130,17 +139,40 @@ export default async function Ranquings({
       {/* Modes separats mai barregats: no hi ha cap conversió entre punts Kilian
           i encerts Pompeu (decisió Roger 24/08/2026). */}
       <nav className="mode-tabs" aria-label="Mode del rànquing">
-        <Link href="/ranquings" className={!kilian ? "active" : undefined} aria-current={!kilian ? "page" : undefined}>
+        <Link href="/ranquings" className={!kilian && !classic ? "active" : undefined} aria-current={!kilian && !classic ? "page" : undefined}>
           Pompeu
         </Link>
         <Link href="/ranquings?mode=kilian" className={kilian ? "active" : undefined} aria-current={kilian ? "page" : undefined}>
           Kilian
         </Link>
+        <Link href="/ranquings?mode=classic" className={classic ? "active" : undefined} aria-current={classic ? "page" : undefined}>
+          Clàssic
+        </Link>
       </nav>
 
       {error && <div className="notice">{error}</div>}
 
-      {kilian ? (
+      {classic ? (
+        <>
+          <p className="muted small">
+            La millor partida de cada jugador. La puntuació equilibra les
+            paraules detectades i les pseudoparaules rebutjades; el temps no compta.
+          </p>
+          <section className="board-block">
+            <h2>Top {RANKING_TOP_N} · puntuació equilibrada</h2>
+            <Board
+              unit="punts"
+              rows={(classicBoard ?? []).map((r) => ({
+                rank: r.rank,
+                nickname: r.nickname,
+                valueText: `${fmtScore(r.score)}/100`,
+                detail: `${r.nCorrect} encerts · ${r.nFalseAlarms} FA`,
+                isMe: r.isMe,
+              }))}
+            />
+          </section>
+        </>
+      ) : kilian ? (
         <>
           <p className="muted small">
             La millor partida de cada jugador, per punts: la puntuació premia la

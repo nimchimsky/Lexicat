@@ -21,11 +21,15 @@ import {
   ABANDON_AFTER_MS,
   INSTABILITY_SE,
   GAME_LENGTH,
+  N_WORD_ITEMS,
+  N_PSEUDO_ITEMS,
   type GameMode,
   KILIAN_BAR_MS,
   KILIAN_GRACE_MS,
   KILIAN_YES_CONFIDENCE,
   KILIAN_NO_CONFIDENCE,
+  CLASSIC_WORD_CONFIDENCE,
+  CLASSIC_PSEUDOWORD_CONFIDENCE,
   SERVE_OVERHEAD_MS,
 } from "../config";
 import {
@@ -33,6 +37,7 @@ import {
   kilianHitPoints,
   type KillianKind,
 } from "../game/kilian";
+import { classicScore } from "../game/classic";
 
 /** Marca com a abandonades (inactivitat) les partides in_progress molt velles.
  *  Només el cron de manteniment la crida (vegeu /api/cron/sweep). */
@@ -67,7 +72,12 @@ function assertUuid(value: string, field: string): void {
 
 function finiteNonNegative(value: number | null, field: string): number | null {
   if (value === null) return null;
-  if (!Number.isFinite(value) || value < 0) throw new HttpError(400, `${field} fora de rang`);
+  // Aquestes mesures es desen en columnes INTEGER de PostgreSQL. Validar el
+  // sostre aquí converteix una entrada hostil o corrupta en 400 en lloc d'un
+  // overflow de DB i un 500.
+  if (!Number.isFinite(value) || value < 0 || value > 2_147_483_647) {
+    throw new HttpError(400, `${field} fora de rang`);
+  }
   return Math.round(value);
 }
 
@@ -124,7 +134,7 @@ export async function startGame(
     const selection = selectGameItems(selectable, exposures, rng, playerGameIndex, COOLDOWN_GAMES);
 
     const gameId = crypto.randomUUID();
-    const responseFormat = mode === "killian" ? "binary" : ACTIVE_RESPONSE_FORMAT;
+    const responseFormat = mode === "pompeu" ? ACTIVE_RESPONSE_FORMAT : "binary";
     await client.query(
       `INSERT INTO games (id, player_id, player_game_index, game_seed,
                           item_bank_version, reference_corpus_version, calibration_version,
@@ -138,7 +148,11 @@ export async function startGame(
         VERSIONS.itemBank,
         VERSIONS.referenceCorpus,
         VERSIONS.calibration,
-        mode === "killian" ? VERSIONS.kilianScoring : VERSIONS.scoring,
+        mode === "killian"
+          ? VERSIONS.kilianScoring
+          : mode === "classic"
+            ? VERSIONS.classicScoring
+            : VERSIONS.scoring,
         responseFormat,
         responseFormat === "slider" ? SLIDER_STEPS : null,
         deviceClass,
@@ -340,7 +354,7 @@ export async function submitResponse(
 ): Promise<SubmittedResponse> {
   assertUuid(input.responseId, "response_id");
   assertUuid(input.gameId, "gameId");
-  if (!Number.isInteger(input.position) || input.position < 1) {
+  if (!Number.isInteger(input.position) || input.position < 1 || input.position > GAME_LENGTH) {
     throw new HttpError(400, "position invàlid");
   }
   const timeToFirstInputMs = finiteNonNegative(input.timeToFirstInputMs, "Temps fins a primera entrada");
@@ -383,6 +397,7 @@ export async function submitResponse(
     }
     if (game.status !== "in_progress") throw new HttpError(409, "La partida ja s'ha tancat");
     const isKillian = game.mode === "killian";
+    const isClassic = game.mode === "classic";
 
     // Validació estricta d'ordre: la posició ha de ser exactament la següent.
     const countRes = await client.query<{ n: string }>(
@@ -474,10 +489,19 @@ export async function submitResponse(
 
       multiplier = isCorrect && !tooFast ? multiplier : null;
     } else {
-      if (!(input.confidence >= 0 && input.confidence <= 1)) {
-        throw new HttpError(400, "confiança fora de [0,1]");
+      if (isClassic) {
+        if (input.choice !== "yes" && input.choice !== "no") {
+          throw new HttpError(400, "Falta el judici paraula/pseudoparaula");
+        }
+        confidence = input.choice === "yes"
+          ? CLASSIC_WORD_CONFIDENCE
+          : CLASSIC_PSEUDOWORD_CONFIDENCE;
+      } else {
+        if (!(input.confidence >= 0 && input.confidence <= 1)) {
+          throw new HttpError(400, "confiança fora de [0,1]");
+        }
+        confidence = input.confidence;
       }
-      confidence = input.confidence;
 
       // Mateix acotament pel rellotge del servidor (served_at): un RT declarat
       // molt per sota del temps de paret només és possible amb un client
@@ -492,9 +516,9 @@ export async function submitResponse(
     }
 
     // Desempat coherent amb tot el sistema (pompeu): confiança exactament
-    // 0,5 → "no". A killian el judici ja és binari i no hi passa mai.
+    // 0,5 → "no". Als modes binaris el judici no passa mai pel centre.
     const isCorrectStored =
-      isKillian
+      isKillian || isClassic
         ? responseKind === "answer" && (input.choice === "yes") === giRow.is_word
         : (confidence as number) > 0.5 === giRow.is_word;
 
@@ -522,7 +546,7 @@ export async function submitResponse(
         game.response_format,
         game.slider_steps,
         isCorrectStored,
-        !isKillian && confidence === 0.5,
+        game.mode === "pompeu" && confidence === 0.5,
         effectiveRt !== null && effectiveRt < MIN_RT_MS,
         VERSIONS.itemBank,
         VERSIONS.referenceCorpus,
@@ -586,6 +610,9 @@ export async function submitResponse(
         if (isKillian) {
           // Kilian tanca amb SQL agregat: barat, es queda dins la transacció.
           await finishKillianGameTx(client, input.gameId);
+        } else if (isClassic) {
+          // Clàssic també és un agregat barat: encerts i falses alarmes.
+          await finishClassicGameTx(client, input.gameId);
         } else {
           // Pompeu marca la partida completada DINS de la transacció, però el
           // càlcul pesat (MAP + lexicó + finestra de rànquings) surt FORA:
@@ -717,12 +744,18 @@ export async function finalizePompeuGame(gameId: string): Promise<void> {
  * escriure resultats/standings, la primera visita a /resultats omple el
  * forat (el lock advisory de finalizePompeuGame evita doble càlcul).
  */
-export async function ensureGameResults(gameId: string): Promise<void> {
-  const g = await query<{ status: string; mode: GameMode }>(
-    `SELECT status, mode FROM games WHERE id = $1`,
+export async function ensureGameResults(gameId: string, playerId: string): Promise<void> {
+  assertUuid(gameId, "gameId");
+  const g = await query<{ status: string; mode: GameMode; player_id: string }>(
+    `SELECT status, mode, player_id FROM games WHERE id = $1`,
     [gameId]
   );
   if (g.rowCount === 0) throw new HttpError(404, "Partida no trobada");
+  // L'autorització precedeix qualsevol reparació. Encara que la vista final
+  // també comprovi el propietari, ensure pot escriure resultats i standings.
+  if (g.rows[0].player_id !== playerId) {
+    throw new HttpError(403, "Partida d'un altre jugador");
+  }
   if (g.rows[0].status !== "completed") throw new HttpError(409, "La partida encara no s'ha acabat");
   if (g.rows[0].mode === "pompeu") {
     await finalizePompeuGame(gameId);
@@ -730,7 +763,8 @@ export async function ensureGameResults(gameId: string): Promise<void> {
     const client = await getPool().connect();
     try {
       await client.query("BEGIN");
-      await finishKillianGameTx(client, gameId);
+      if (g.rows[0].mode === "killian") await finishKillianGameTx(client, gameId);
+      else await finishClassicGameTx(client, gameId);
       await client.query("COMMIT");
     } catch (e) {
       await client.query("ROLLBACK");
@@ -739,6 +773,66 @@ export async function ensureGameResults(gameId: string): Promise<void> {
       client.release();
     }
   }
+}
+
+/**
+ * Tancament d'una partida Clàssic. La puntuació cl-1 és la mitjana de la
+ * taxa d'encerts en paraules i la taxa de rebuig de pseudoparaules: el temps,
+ * la dificultat i l'ordre dels ítems no hi intervenen.
+ */
+async function finishClassicGameTx(client: import("pg").PoolClient, gameId: string): Promise<void> {
+  const fast = await client.query<{ n: string }>(
+    `SELECT COUNT(*) AS n FROM responses WHERE game_id = $1 AND rt_below_threshold`,
+    [gameId]
+  );
+  if (Number(fast.rows[0].n) / GAME_LENGTH >= FAST_GUESS_GAME_RATIO) {
+    await client.query(`UPDATE games SET quality_flag = 'suspect_fast' WHERE id = $1`, [gameId]);
+  }
+
+  const agg = await client.query<{
+    n: number; n_words: number; n_pseudos: number;
+    n_correct: number; n_hits: number; n_fa: number;
+  }>(
+    `SELECT COUNT(*)::int AS n,
+            COUNT(*) FILTER (WHERE is_word)::int AS n_words,
+            COUNT(*) FILTER (WHERE NOT is_word)::int AS n_pseudos,
+            COUNT(*) FILTER (WHERE is_correct)::int AS n_correct,
+            COUNT(*) FILTER (WHERE is_word AND is_correct)::int AS n_hits,
+            COUNT(*) FILTER (WHERE NOT is_word AND NOT is_correct)::int AS n_fa
+     FROM responses WHERE game_id = $1`,
+    [gameId]
+  );
+  const a = agg.rows[0];
+  if (a.n !== GAME_LENGTH || a.n_words !== N_WORD_ITEMS || a.n_pseudos !== N_PSEUDO_ITEMS) {
+    throw new HttpError(409, "La composició de la partida Clàssic és invàlida");
+  }
+  const score = classicScore(a.n_hits, a.n_fa);
+
+  const verRes = await client.query<{
+    scoring_version: string; reference_corpus_version: string; calibration_version: string;
+  }>(
+    `SELECT scoring_version, reference_corpus_version, calibration_version FROM games WHERE id = $1`,
+    [gameId]
+  );
+  if (verRes.rowCount === 0) throw new HttpError(404, "Partida no trobada");
+
+  await client.query(
+    `UPDATE games SET status = 'completed', finished_at = COALESCE(finished_at, now()) WHERE id = $1`,
+    [gameId]
+  );
+  await client.query(
+    `INSERT INTO game_results (game_id, n_responses, theta, se_theta, se_total, pct_lexicon,
+        pct_lo, pct_hi, percentile, d_prime, criterion, n_correct, n_false_alarms,
+        n_fifty_fifty, score, lexicon_game_score, calibration_version, reference_corpus_version,
+        scoring_version, mode, best_streak, max_multiplier, n_timeouts)
+     VALUES ($1,$2,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,$3,$4,0,$5,NULL,$6,$7,$8,'classic',NULL,NULL,0)
+     ON CONFLICT (game_id) DO NOTHING`,
+    [
+      gameId, a.n, a.n_correct, a.n_fa, score,
+      verRes.rows[0].calibration_version, verRes.rows[0].reference_corpus_version,
+      verRes.rows[0].scoring_version,
+    ]
+  );
 }
 
 /**

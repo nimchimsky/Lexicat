@@ -39,13 +39,13 @@ async function bankWordCount(client?: Pick<import("pg").PoolClient, "query">): P
 async function wordsSeenCount(playerId: string, client?: Pick<import("pg").PoolClient, "query">): Promise<number> {
   const q = client ? client.query.bind(client) : query;
   const r = await q<{ n: number }>(
-    // El progrés és compartit: les paraules reals vistes als dos modes
+    // El progrés és compartit: les paraules reals vistes a tots tres modes
     // desbloquegen zones del mateix mapa.
     `SELECT COUNT(DISTINCT item_id)::int AS n
      FROM responses
      WHERE player_id = $1
        AND is_word
-       AND mode IN ('pompeu', 'killian')`,
+       AND mode IN ('pompeu', 'killian', 'classic')`,
     [playerId]
   );
   return Number(r.rows[0].n);
@@ -95,14 +95,16 @@ export async function claimRegion(
     await client.query("BEGIN");
     await client.query(`SELECT id FROM players WHERE id = $1 FOR UPDATE`, [playerId]);
 
-    const [wordsTotal, wordsSeen, claims] = await Promise.all([
-      bankWordCount(client),
-      wordsSeenCount(playerId, client),
-      client.query<{ region_id: string }>(
-        `SELECT region_id FROM player_regions WHERE player_id = $1`,
-        [playerId]
-      ),
-    ]);
+    // A PoolClient serialitza una sola connexió. Llançar consultes en
+    // paral·lel sobre el mateix client transaccional està deprecat a pg 8 i
+    // deixarà de funcionar a pg 9; mantenim-les explícitament en ordre dins
+    // del bloqueig del jugador.
+    const wordsTotal = await bankWordCount(client);
+    const wordsSeen = await wordsSeenCount(playerId, client);
+    const claims = await client.query<{ region_id: string }>(
+      `SELECT region_id FROM player_regions WHERE player_id = $1`,
+      [playerId]
+    );
 
     const earned = zonesEarned(wordsSeen, zoneThresholds(wordsTotal));
     if ((claims.rowCount ?? 0) >= earned) {

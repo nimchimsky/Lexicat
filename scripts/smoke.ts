@@ -110,21 +110,21 @@ async function main() {
   console.log("Partida completa: cap fuga d'is_word ni item_id ✔");
   console.log(`Format servit per la partida: ${format} (esperat slider) ${format === "slider" ? "✔" : "✘"}`);
 
-  // 6) Reenviament idempotent d'una resposta ja registrada
-  // (es fa implícitament al pas 5 amb el mateix UUID? no: aquí comprovem l'API)
-  // Reenviem l'última resposta amb un response_id JA usat:
-  const dupe = await fetch(`${base}/api/game/response`, {
+  // 6) Una resposta nova sobre una partida ja tancada falla netament.
+  const closedResponse = await fetch(`${base}/api/game/response`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Cookie: cookieHeader },
     body: JSON.stringify({
       responseId: "11111111-1111-4111-8111-111111111111",
       gameId,
-      position: 999,
+      position: 100,
       confidence: 0.9,
     }),
   });
-  // Ha de fallar net (partida tancada), no penjar-se ni corrompre res.
-  console.log(`Reenviament sobre partida tancada: HTTP ${dupe.status} (esperat 409/404) ✔`);
+  if (closedResponse.status !== 409) {
+    throw new Error(`Resposta nova sobre partida tancada: HTTP ${closedResponse.status} (esperat 409)`);
+  }
+  console.log("Resposta nova sobre partida tancada: HTTP 409 ✔");
 
   // 7) Resultats
   const page = await fetch(`${base}/resultats/${gameId}`, { headers: { Cookie: cookieHeader } });
@@ -193,6 +193,29 @@ async function main() {
     throw new Error(`L'upgrade de convidat no ha conservat la identitat: ${JSON.stringify(meData2.player)}`);
   }
   console.log("Upgrade convidat→compte: mateixa identitat, correu assignat ✔");
+
+  // 9b) Si el correu ja pertany a un compte, un convidat ha d'entrar en
+  // aquell compte en lloc de fallar per l'UNIQUE(email).
+  const secondGuestRes = await fetch(`${base}/api/game/guest`, { method: "POST" });
+  const secondGuestCookies = extractSetCookies(secondGuestRes.headers);
+  if (!secondGuestRes.ok || !secondGuestCookies.some((c) => c.startsWith("lexicat_session"))) {
+    throw new Error("No s'ha pogut crear el segon convidat per provar el login existent");
+  }
+  const existingLinkRes = await fetch(`${base}/api/auth/request-link`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: secondGuestCookies.join("; ") },
+    body: JSON.stringify({ email }),
+  });
+  const existingLink = await existingLinkRes.json();
+  if (!existingLink.devUrl) throw new Error("Sense devUrl per entrar al compte existent");
+  const existingCookies = await redeemToken(existingLink.devUrl, secondGuestCookies);
+  const existingMe = await (
+    await fetch(`${base}/api/me`, { headers: { Cookie: existingCookies.join("; ") } })
+  ).json();
+  if (existingMe.player?.email !== email) {
+    throw new Error(`El convidat no ha entrat al compte existent: ${JSON.stringify(existingMe.player)}`);
+  }
+  console.log("Convidat→compte existent: conflicte de correu resolt i sessió creada ✔");
 
   // 10) Mapa: amb l'arrencada ràpida (MAPA_FAST_START_WORDS), la primera
   // zona cau en acabar la PRIMERA partida (66 paraules vistes): 1 fitxa

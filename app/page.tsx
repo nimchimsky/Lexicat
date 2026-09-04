@@ -112,6 +112,25 @@ export default async function Home() {
             <GuestButton primary label="Juga ara" href="/killian" />
           )}
         </section>
+
+        <section className="mode-card">
+          <span className="mode-num" aria-hidden="true">
+            03
+          </span>
+          <p className="mode-tag">Decisió directa</p>
+          <p className="mode-name">Clàssic</p>
+          <p className="mode-desc">
+            Cent estímuls, sense rellotge. Digues paraula o pseudoparaula amb
+            un botó o fent swipe.
+          </p>
+          {player ? (
+            <Link href="/classic" className="btn">
+              Juga
+            </Link>
+          ) : (
+            <GuestButton primary label="Juga ara" href="/classic" />
+          )}
+        </section>
       </div>
 
       <div className="actions">

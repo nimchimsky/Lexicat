@@ -197,6 +197,32 @@ d("integració · esquema + partida + registre", () => {
     }
   });
 
+  it("autoritza el propietari abans de reparar resultats", async () => {
+    const { startGame, ensureGameResults } = await import("../lib/server/game");
+    const c = await db();
+    try {
+      const ownerId = await newPlayer(c);
+      const strangerId = await newPlayer(c);
+      const g = await startGame(ownerId, "mobile", "classic");
+
+      // Simula el forat que ensureGameResults ha de reparar: partida tancada
+      // sense la fila derivada. Un tercer no ha de poder activar l'escriptura.
+      await c.query(
+        `UPDATE games SET status = 'completed', finished_at = now() WHERE id = $1`,
+        [g.gameId]
+      );
+      await expect(ensureGameResults(g.gameId, strangerId)).rejects.toMatchObject({ status: 403 });
+
+      const results = await c.query(
+        `SELECT 1 FROM game_results WHERE game_id = $1`,
+        [g.gameId]
+      );
+      expect(results.rowCount).toBe(0);
+    } finally {
+      await c.end();
+    }
+  });
+
   it("criteri 6 i 7 · d′ finit i ≤ sostre també al camí del servidor", async () => {
     const { startGame, serveItem, submitResponse } = await import("../lib/server/game");
     const c = await db();
@@ -434,6 +460,96 @@ d("integració · mode Kilian", () => {
       expect(kb.some((row) => row.score > 0)).toBe(true);
       const pompeuBoards = await getRankings();
       expect(Array.isArray(pompeuBoards.individualHits)).toBe(true);
+    } finally {
+      await c.end();
+    }
+  });
+});
+
+d("integració · mode Clàssic", () => {
+  beforeAll(async () => {
+    if (!ingestReady) {
+      const { runMigrations } = await import("../scripts/migrate-lib");
+      await runMigrations();
+      const { runIngest } = await import("../scripts/ingest-item-bank");
+      await runIngest();
+      ingestReady = true;
+    }
+  });
+
+  async function newPlayer(c: Client): Promise<string> {
+    const r = await c.query<{ id: string }>(
+      `INSERT INTO players (id, email, nickname) VALUES (gen_random_uuid(), $1, $2) RETURNING id`,
+      [`classic-${Date.now()}-${Math.random().toString(36).slice(2)}@example.cat`, `classic-${Math.random().toString(36).slice(2, 8)}`]
+    );
+    return r.rows[0].id;
+  }
+
+  it("100 judicis binaris: cl-1 només usa encerts i falses alarmes", async () => {
+    const { startGame, serveItem, submitResponse } = await import("../lib/server/game");
+    const { classicScore } = await import("../lib/game/classic");
+    const c = await db();
+    try {
+      const pid = await newPlayer(c);
+      const g = await startGame(pid, "mobile", "classic");
+      expect(g.mode).toBe("classic");
+      expect(g.responseFormat).toBe("binary");
+
+      let words = 0, pseudos = 0, hits = 0, falseAlarms = 0;
+      for (let p = 1; p <= 100; p++) {
+        const item = await c.query<{ is_word: boolean }>(
+          `SELECT is_word FROM game_items WHERE game_id = $1 AND position = $2`,
+          [g.gameId, p]
+        );
+        const isWord = item.rows[0].is_word;
+        let choice: "yes" | "no";
+        if (isWord) {
+          words++;
+          choice = words <= 60 ? "yes" : "no"; // 60 hits, 6 misses
+          if (choice === "yes") hits++;
+        } else {
+          pseudos++;
+          choice = pseudos <= 4 ? "yes" : "no"; // 4 falses alarmes
+          if (choice === "yes") falseAlarms++;
+        }
+        await serveItem(pid, g.gameId, p);
+        const result = await submitResponse(pid, {
+          responseId: crypto.randomUUID(), gameId: g.gameId, position: p,
+          confidence: choice === "yes" ? 0.95 : 0.05,
+          timeToFirstInputMs: 700, responseTimeMs: 700, nAdjustments: 0,
+          kind: "answer", choice, inputMethod: p % 2 ? "swipe" : "button",
+        }, "mobile");
+        expect(result.outcome).toBeUndefined(); // cap feedback per ítem
+        expect(result.finished).toBe(p === 100);
+      }
+
+      expect(hits).toBe(60);
+      expect(falseAlarms).toBe(4);
+      const gr = await c.query<{
+        mode: string; score: number; n_correct: number; n_false_alarms: number;
+        theta: number | null; best_streak: number | null;
+      }>(
+        `SELECT mode, score, n_correct, n_false_alarms, theta, best_streak
+         FROM game_results WHERE game_id = $1`,
+        [g.gameId]
+      );
+      expect(gr.rows[0].mode).toBe("classic");
+      expect(Number(gr.rows[0].score)).toBe(classicScore(hits, falseAlarms));
+      expect(gr.rows[0].n_correct).toBe(90);
+      expect(gr.rows[0].n_false_alarms).toBe(4);
+      expect(gr.rows[0].theta).toBeNull();
+      expect(gr.rows[0].best_streak).toBeNull();
+
+      const standings = await c.query(`SELECT 1 FROM player_standings WHERE player_id = $1`, [pid]);
+      expect(standings.rowCount).toBe(0); // no contamina Pompeu
+
+      const { getClassicRankings, getGameResultsView } = await import("../lib/server/views");
+      const board = await getClassicRankings(pid);
+      expect(board.some((row) => row.isMe && row.score === classicScore(hits, falseAlarms))).toBe(true);
+      const view = await getGameResultsView(g.gameId, pid);
+      expect(view.mode).toBe("classic");
+      expect(view.discoveries).toHaveLength(6);
+      expect(view.falseAlarms).toHaveLength(4);
     } finally {
       await c.end();
     }

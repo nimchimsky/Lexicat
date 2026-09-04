@@ -1730,7 +1730,8 @@ table.board tr.me td.player { color: var(--accent); font-weight: 700; }
   .mapa-bg .mapa-inject svg { width: 760px; }
   .home-stats { padding: 20px 24px; }
   .home-stats .big-number { font-size: 58px; }
-  .mode-grid { gap: 32px; margin-top: 48px; }
+  .mode-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; margin-top: 48px; }
+  .profile-mode-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .mode-card { min-height: 300px; padding: clamp(28px, 2.6vw, 40px); gap: 10px; }
   .mode-num { top: 28px; right: clamp(28px, 2.6vw, 40px); }
   .mode-name { font-size: clamp(34px, 2.7vw, 42px); }
@@ -1931,6 +1932,13 @@ table.board tr.me td.player { color: var(--accent); font-weight: 700; }
 /* ---------- Comandament: botons sí/no ---------- */
 
 .kil-dock { gap: var(--s2); }
+.classic-keys { margin: 0; text-align: center; }
+.classic-stage .kil-stage-card { height: 100%; }
+.classic-game .kil-btn {
+  font-size: clamp(14px, 4.3vw, var(--fs-h3));
+  letter-spacing: 0.03em;
+  gap: var(--s1);
+}
 /* ---------- Feedback: gran, centrat, just sota les paraules ---------- */
 
 .kil-feedback {

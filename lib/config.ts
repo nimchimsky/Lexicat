@@ -8,13 +8,15 @@ export const VERSIONS = {
   scoring: "sc-1",
   /** Puntuació del mode Kilian, independent de la sc-1 de Pompeu. */
   kilianScoring: "ki-1",
+  /** Puntuació binària equilibrada del mode Clàssic. */
+  classicScoring: "cl-1",
 } as const;
 
 // -----------------------------------------------------------------------
 // Modes de joc
 // -----------------------------------------------------------------------
 
-export type GameMode = "pompeu" | "killian";
+export type GameMode = "pompeu" | "killian" | "classic";
 
 // Prior N(0, 0.624²): distribució real de θ de la població de l'estudi.
 export const PRIOR_MEAN = 0;
@@ -132,6 +134,14 @@ export const KILIAN_YES_CONFIDENCE = 0.95;
 export const KILIAN_NO_CONFIDENCE = 0.05;
 /** Sostre del multiplicador (inabastable amb 100 ítems, però fixa el límit). */
 export const KILIAN_MULTIPLIER_CAP = 3;
+
+// -----------------------------------------------------------------------
+// Mode Clàssic (classic_scoring_version cl-1)
+// -----------------------------------------------------------------------
+
+/** Valors persistits per als dos judicis binaris (mai no hi ha resposta neutra). */
+export const CLASSIC_WORD_CONFIDENCE = 0.95;
+export const CLASSIC_PSEUDOWORD_CONFIDENCE = 0.05;
 
 // -----------------------------------------------------------------------
 // Qualitat i integritat

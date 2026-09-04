@@ -9,7 +9,7 @@ export default function robots(): MetadataRoute.Robots {
         userAgent: "*",
         allow: "/",
         // Pàgines privades o amb estat de sessió: res a indexar.
-        disallow: ["/api/", "/joc", "/killian", "/resultats/", "/compte", "/mapa", "/benvingut", "/entrar"],
+        disallow: ["/api/", "/joc", "/killian", "/classic", "/resultats/", "/compte", "/mapa", "/benvingut", "/entrar"],
       },
     ],
     sitemap: `${SITE_URL}/sitemap.xml`,

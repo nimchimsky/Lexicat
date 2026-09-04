@@ -11,6 +11,8 @@ import { HttpError } from "./http";
 export const SESSION_COOKIE = "lexicat_session";
 const SESSION_TTL_MS = 180 * 24 * 60 * 60 * 1000;
 const MAGIC_TTL_MS = 15 * 60 * 1000;
+const TOKEN_RE = /^[0-9a-f]{64}$/i;
+const MAX_EMAIL_LENGTH = 320;
 
 type Client = PoolClient;
 
@@ -26,7 +28,9 @@ export function randomToken(): string {
 export async function createMagicToken(email: string, ip: string | null): Promise<string> {
   if (typeof email !== "string") throw new HttpError(400, "Correu invàlid");
   const emailNorm = email.trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNorm)) throw new HttpError(400, "Correu invàlid");
+  if (emailNorm.length > MAX_EMAIL_LENGTH || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNorm)) {
+    throw new HttpError(400, "Correu invàlid");
+  }
   // Cap de reutilització de tokens pendents: cada petició en genera un de nou,
   // però es poden acumular; la poda dels caducats és feina del sweep (cron).
   const token = randomToken();
@@ -75,6 +79,10 @@ async function setSessionCookie(sessionToken: string): Promise<void> {
  * jugador i sessió): o entra del tot, o no entra i el token continua vàlid.
  */
 export async function redeemMagicToken(token: string): Promise<{ playerId: string; hasNickname: boolean }> {
+  // Els tokens generats són sempre 32 bytes hexadecimals. Rebutjar qualsevol
+  // altra mida abans de calcular-ne el hash evita entrades arbitràriament grans
+  // i fa que els enllaços malformats fallin com a validació, no a la DB.
+  if (!TOKEN_RE.test(token)) throw new HttpError(400, "Enllaç invàlid o caducat");
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
@@ -91,11 +99,25 @@ export async function redeemMagicToken(token: string): Promise<{ playerId: strin
     // 1) Upgrade de convidat: mateixa fila, mateix historial.
     const current = await currentPlayer();
     if (current && current.email === null) {
-      const claim = await client.query<{ id: string }>(
-        `UPDATE players SET email = $2 WHERE id = $1 AND email IS NULL AND deleted_at IS NULL
-         RETURNING id`,
-        [current.id, email]
-      );
+      // L'UPDATE pot topar amb l'UNIQUE(email) si aquest correu ja pertany a
+      // un compte. Aïllem l'intent en un savepoint: PostgreSQL deixa tota la
+      // transacció en estat d'error després d'un 23505 fins que es desfà el
+      // savepoint, i sense això el flux normal de login de sota no s'executa.
+      await client.query("SAVEPOINT guest_upgrade");
+      let claim: { rowCount: number | null };
+      try {
+        claim = await client.query<{ id: string }>(
+          `UPDATE players SET email = $2 WHERE id = $1 AND email IS NULL AND deleted_at IS NULL
+           RETURNING id`,
+          [current.id, email]
+        );
+        await client.query("RELEASE SAVEPOINT guest_upgrade");
+      } catch (e) {
+        await client.query("ROLLBACK TO SAVEPOINT guest_upgrade");
+        await client.query("RELEASE SAVEPOINT guest_upgrade");
+        if ((e as { code?: string }).code !== "23505") throw e;
+        claim = { rowCount: 0 };
+      }
       if (claim.rowCount !== 0) {
         const t = await insertSessionTx(client, current.id);
         await client.query("COMMIT");

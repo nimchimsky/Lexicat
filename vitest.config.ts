@@ -14,9 +14,10 @@ export default defineConfig({
     testTimeout: 120_000,
     hookTimeout: 300_000,
     // The psychometric suite performs deliberately large MAP simulations.
-    // A single fork avoids Vitest's worker task-update timeout on Windows
-    // while keeping the run deterministic and memory-bounded.
-    pool: "forks",
+    // On Windows, fork IPC can time out in `onTaskUpdate` after every assertion
+    // has passed. One worker thread keeps the run deterministic and bounded
+    // while avoiding that child-process transport failure.
+    pool: "threads",
     maxWorkers: 1,
     minWorkers: 1,
   },

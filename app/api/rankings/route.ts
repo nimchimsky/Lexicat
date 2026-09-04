@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { currentPlayer } from "@/lib/server/auth";
-import { getRankings, getKilianRankings } from "@/lib/server/views";
+import { getRankings, getKilianRankings, getClassicRankings } from "@/lib/server/views";
 import { apiErrorResponse } from "@/lib/server/apiError";
 
 export const runtime = "nodejs";
@@ -14,6 +14,9 @@ export async function GET(req: Request) {
     const player = await currentPlayer();
     if (mode === "kilian") {
       return NextResponse.json({ kilian: await getKilianRankings(player?.id ?? null) });
+    }
+    if (mode === "classic") {
+      return NextResponse.json({ classic: await getClassicRankings(player?.id ?? null) });
     }
     return NextResponse.json(await getRankings(player?.id ?? null));
   } catch (e) {

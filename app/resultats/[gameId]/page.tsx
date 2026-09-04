@@ -3,8 +3,9 @@ import Link from "next/link";
 import { currentPlayer } from "@/lib/server/auth";
 import { getGameResultsView, type GameResultsView, type ResultItemRow } from "@/lib/server/views";
 import { getMapaView } from "@/lib/server/mapa";
-import { ensureGameResults } from "@/lib/server/game";
+import { ensureGameResults, getOpenGame } from "@/lib/server/game";
 import { HttpError } from "@/lib/server/http";
+import { N_PSEUDO_ITEMS, N_WORD_ITEMS } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
@@ -34,18 +35,22 @@ export default async function Resultats({ params }: { params: Promise<{ gameId: 
   try {
     // Reparació a demanda: si el procés va morir entre tancar la partida i
     // escriure game_results, la primera visita omple el forat (idempotent).
-    await ensureGameResults(gameId);
+    await ensureGameResults(gameId, player.id);
     view = await getGameResultsView(gameId, player.id);
   } catch (e) {
     if (e instanceof HttpError) {
-      // Inexistents o d'un altre jugador → pàgina 404; encara en curs → al joc.
-      if (e.status === 404 || e.status === 403) notFound();
-      if (e.status === 409) redirect("/joc");
+      // Identificador invàlid, inexistent o d'un altre jugador → 404.
+      if (e.status === 400 || e.status === 404 || e.status === 403) notFound();
+      if (e.status === 409) {
+        const open = await getOpenGame(player.id);
+        redirect(open?.mode === "killian" ? "/killian" : open?.mode === "classic" ? "/classic" : "/joc");
+      }
     }
     throw e; // error d'infraestructura: boundary d'error, mai un silenci
   }
 
   if (view.mode === "killian") return <KilianResults view={view} playerId={player.id} />;
+  if (view.mode === "classic") return <ClassicResults view={view} playerId={player.id} />;
   return <PompeuResults view={view} playerId={player.id} />;
 }
 
@@ -226,6 +231,120 @@ function PompeuResults({ view, playerId }: { view: GameResultsView; playerId: st
         <Link href="/ranquings" className="btn secondary">
           Veure rànquings
         </Link>
+      </div>
+    </main>
+  );
+}
+
+/* ============================================================
+   Mode Clàssic: decisió binària sense temps
+   ============================================================ */
+
+function ClassicResults({ view, playerId }: { view: GameResultsView; playerId: string }) {
+  const s = view.summary;
+  const all = [...view.rest, ...view.discoveries, ...view.falseAlarms].sort(
+    (a, b) => a.position - b.position
+  );
+  const hits = view.rest.filter((r) => r.isWord).length;
+  const correctRejections = view.rest.filter((r) => !r.isWord).length;
+
+  return (
+    <main>
+      <p className="eyebrow">Mode Clàssic · partida acabada</p>
+      <h1>{fmtScoreInt(s.score)} / 100</h1>
+      <p className="lead">Puntuació equilibrada</p>
+
+      <div className="statgrid">
+        <div className="stat">
+          <b>{hits}/{N_WORD_ITEMS}</b>
+          <span>paraules detectades</span>
+        </div>
+        <div className="stat">
+          <b>{s.nFalseAlarms}/{N_PSEUDO_ITEMS}</b>
+          <span>falses alarmes</span>
+        </div>
+        <div className="stat">
+          <b>{correctRejections}/{N_PSEUDO_ITEMS}</b>
+          <span>pseudoparaules rebutjades</span>
+        </div>
+        <div className="stat">
+          <b>{s.nCorrect}/{s.totalItems}</b>
+          <span>encerts totals</span>
+        </div>
+      </div>
+
+      <p className="small muted center-text kil-strip-caption">
+        La puntuació és la mitjana del percentatge de paraules detectades i el
+        percentatge de pseudoparaules rebutjades. El temps no hi intervé.
+      </p>
+      <div
+        className="kil-strip"
+        role="img"
+        aria-label={`La partida en cent cel·les: ${s.nCorrect} encerts i ${s.totalItems - s.nCorrect} errors`}
+      >
+        {all.map((r) => <i key={r.position} className={r.isCorrect ? "ok" : "ko"} />)}
+      </div>
+
+      <MapaAfterGame playerId={playerId} />
+
+      <h2>Paraules que no has reconegut</h2>
+      {view.discoveries.length === 0 ? (
+        <p className="muted">Cap: has reconegut totes les paraules reals.</p>
+      ) : (
+        <ul className="wordlist">
+          {view.discoveries.map((d) => (
+            <li key={d.position}>
+              <a className="word" href={d.diecUrl} target="_blank" rel="noopener noreferrer">
+                {d.stimulus}
+              </a>
+              <span className="pts">paraula</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <h2>Pseudoparaules que has acceptat</h2>
+      {view.falseAlarms.length === 0 ? (
+        <p className="muted">Cap: has rebutjat totes les pseudoparaules.</p>
+      ) : (
+        <ul className="wordlist">
+          {view.falseAlarms.map((d) => (
+            <li key={d.position}>
+              <span className="word">{d.stimulus}</span>
+              <span className="pts">pseudoparaula</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <details className="fold">
+        <summary>La resta ({view.rest.length} encerts)</summary>
+        <ul className="wordlist">
+          {view.rest.map((d) => (
+            <li key={d.position}>
+              {d.isWord ? (
+                <a className="word" href={d.diecUrl} target="_blank" rel="noopener noreferrer">
+                  {d.stimulus}
+                </a>
+              ) : (
+                <span className="word">{d.stimulus}</span>
+              )}
+              <span className="pts">correcte</span>
+            </li>
+          ))}
+        </ul>
+      </details>
+
+      {view.qualityFlag ? (
+        <div className="notice">
+          Aquesta partida té moltes respostes anormalment ràpides i no entra
+          al rànquing. La puntuació i les dades es conserven.
+        </div>
+      ) : null}
+
+      <div className="actions">
+        <Link href="/classic" className="btn">Juga una altra</Link>
+        <Link href="/ranquings?mode=classic" className="btn secondary">Rànquing Clàssic</Link>
       </div>
     </main>
   );

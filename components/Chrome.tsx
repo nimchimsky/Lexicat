@@ -11,13 +11,13 @@ import { usePathname } from "next/navigation";
 const NAV = [
   { href: "/mapa", label: "Mapa" },
   { href: "/ranquings", label: "Rànquings" },
-  { href: "/estudi_23691891.html", label: "Estudi" },
+  { href: "/estudi_23691891.html", label: "Estudi original" },
   { href: "/compte", label: "Compte" },
 ];
 
 export default function Chrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const play = pathname === "/joc" || pathname === "/killian";
+  const play = pathname === "/joc" || pathname === "/killian" || pathname === "/classic";
 
   if (play) {
     return <div className="shell play">{children}</div>;
